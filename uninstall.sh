@@ -15,7 +15,7 @@ rm -rf "$OPT_DIR"
 rm -f "$BIN_DIR/grok-bot" "$BIN_DIR/grokbot"
 rm -f "$DATA_HOME/applications/grok-bot.desktop"
 rm -f "$HOME/Desktop/grok-bot.desktop"
-rm -f "$DATA_HOME/icons/hicolor/256x256/apps/grok-bot.png"
+rm -f "$DATA_HOME/icons/hicolor/"{512x512,256x256,128x128,64x64,48x48,32x32}/apps/grok-bot.png
 
 if [[ -d /usr/local/share/applications ]]; then
   rm -f /usr/local/share/applications/grok-bot.desktop 2>/dev/null || true

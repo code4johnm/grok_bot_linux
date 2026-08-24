@@ -91,10 +91,13 @@ elif [[ -f "$OPT_DIR/grok-bot.png" ]]; then
 else
   icon_src=""
 fi
-icon_dir="$DATA_HOME/icons/hicolor/256x256/apps"
-mkdir -p "$icon_dir" "$DATA_HOME/applications"
+mkdir -p "$DATA_HOME/applications"
 if [[ -n "$icon_src" ]]; then
-  install -m 0644 "$icon_src" "$icon_dir/grok-bot.png"
+  for icon_size in 512 256; do
+    icon_dir="$DATA_HOME/icons/hicolor/${icon_size}x${icon_size}/apps"
+    mkdir -p "$icon_dir"
+    install -m 0644 "$icon_src" "$icon_dir/grok-bot.png"
+  done
   if [[ "$(readlink -f "$icon_src")" != "$(readlink -f "$OPT_DIR/grok-bot.png" 2>/dev/null || true)" ]]; then
     install -m 0644 "$icon_src" "$OPT_DIR/grok-bot.png"
   fi
