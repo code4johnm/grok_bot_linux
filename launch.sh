@@ -183,7 +183,26 @@ BIN="$APP_DIR/grok-bot"
   exit 1
 }
 
+# Chromium/Electron need a UTF-8 locale or CJK, emoji, and symbols render as
+# tofu or "?" and clipboard/input mangle non-ASCII.
+ensure_utf8_locale() {
+  local current="${LC_ALL:-${LC_CTYPE:-${LANG:-C}}}"
+  case "$current" in
+    *.UTF-8|*.utf8|*.UTF8|C.UTF-8|C.utf8) return 0 ;;
+  esac
+  local utf8=C.UTF-8
+  if command -v locale >/dev/null 2>&1; then
+    if locale -a 2>/dev/null | grep -qiE '^C\.(utf-?8)$'; then
+      utf8=C.UTF-8
+    elif locale -a 2>/dev/null | grep -qiE '^en_US\.(utf-?8)$'; then
+      utf8=en_US.UTF-8
+    fi
+  fi
+  export LANG="$utf8" LC_ALL="$utf8" LC_CTYPE="$utf8"
+}
+
 detect_libva_driver
+ensure_utf8_locale
 
 EXTRA=()
 # Chromium sandbox needs SUID root chrome-sandbox. Docker / unprivileged

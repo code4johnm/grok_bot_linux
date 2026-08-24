@@ -21,7 +21,8 @@ grok-bot
 
 `./install.sh` will:
 
-- Install GTK/NSS/ALSA/VA-API packages for Debian, Ubuntu, Kali, Fedora, or Arch
+- Install GTK/NSS/ALSA/VA-API packages and Unicode fonts (Noto, CJK, emoji)
+- Run Grok Bot under a UTF-8 locale so non-ASCII text renders and copies correctly
 - Optionally install Docker Engine + Compose (`--with-docker`)
 - Unpack Grok Bot into `~/.local/opt/Grok_Bot`
 - Install `~/.local/bin/grok-bot` and a desktop entry
@@ -120,11 +121,15 @@ libva error: /usr/lib/x86_64-linux-gnu/dri/iHD_drv_video.so init failed
 `launch.sh` detects pre-Broadwell Intel GPUs and sets `LIBVA_DRIVER_NAME=i965`.
 Override with `LIBVA_DRIVER_NAME=... grok-bot` if needed.
 
+If `LANG` is not a UTF-8 locale, the launcher sets `C.UTF-8` (or `en_US.UTF-8`)
+so Chromium can display CJK, emoji, and other Unicode text. Install Noto fonts
+with `./scripts/install-deps.sh` or `grok-bot update --deps-only`.
+
 ## Layout
 
 ```text
 install.sh / uninstall.sh / launch.sh
-scripts/install-deps.sh      GTK, NSS, ALSA, libva, i965, intel-media
+scripts/install-deps.sh      GTK, NSS, ALSA, libva, Noto/CJK/emoji fonts
 scripts/install-docker.sh    docker.io, compose, containerd, docker group
 scripts/download-app.sh      bundle or fetch Grok_Bot_<ver>_linux_x64.tar.gz
 scripts/update.sh            wrapper + app + OS package updates

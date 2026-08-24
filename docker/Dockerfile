@@ -3,12 +3,22 @@ FROM debian:bookworm-slim
 ENV DEBIAN_FRONTEND=noninteractive \
     GROK_BOT_HOME=/opt/Grok_Bot \
     GROK_BOT_NO_SANDBOX=1 \
-    ELECTRON_OZONE_PLATFORM_HINT=auto
+    ELECTRON_OZONE_PLATFORM_HINT=auto \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    LC_CTYPE=C.UTF-8
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
         xdg-utils \
         fonts-liberation \
+        fonts-noto-core \
+        fonts-noto-mono \
+        fonts-noto-ui-core \
+        fonts-noto-color-emoji \
+        fonts-noto-cjk \
+        fonts-unifont \
+        locales \
         libgtk-3-0 \
         libnss3 \
         libnotify4 \

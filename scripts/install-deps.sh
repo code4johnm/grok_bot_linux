@@ -35,7 +35,14 @@ install_debian() {
   for p in \
       ca-certificates \
       xdg-utils \
+      locales \
       fonts-liberation \
+      fonts-noto-core \
+      fonts-noto-mono \
+      fonts-noto-ui-core \
+      fonts-noto-color-emoji \
+      fonts-noto-cjk \
+      fonts-unifont \
       libnss3 \
       libnotify4 \
       libxss1 \
@@ -71,10 +78,13 @@ install_fedora() {
   run dnf install -y \
     gtk3 nss libXScrnSaver alsa-lib mesa-libgbm libdrm libxkbcommon \
     libXcomposite libXdamage libXrandr libXfixes libXtst cups-libs \
-    libnotify libsecret liberation-fonts libva libva-intel-driver \
+    libnotify libsecret liberation-fonts google-noto-sans-fonts \
+    google-noto-sans-mono-fonts google-noto-emoji-color-fonts \
+    google-noto-sans-cjk-fonts unifont-fonts libva libva-intel-driver \
     intel-media-driver xdg-utils at-spi2-atk at-spi2-core vulkan-loader \
     libappindicator-gtk3 || \
-  run dnf install -y gtk3 nss alsa-lib mesa-libgbm libdrm libnotify libva xdg-utils
+  run dnf install -y gtk3 nss alsa-lib mesa-libgbm libdrm libnotify libva xdg-utils \
+    google-noto-sans-fonts google-noto-emoji-color-fonts
 }
 
 install_arch() {
@@ -82,7 +92,8 @@ install_arch() {
   run pacman -Sy --needed --noconfirm \
     gtk3 nss libxss alsa-lib mesa libdrm libxkbcommon libxcomposite \
     libxdamage libxrandr libxtst libxfixes libcups libnotify libsecret \
-    ttf-liberation libva libva-intel-driver intel-media-driver xdg-utils \
+    ttf-liberation noto-fonts noto-fonts-emoji noto-fonts-cjk ttf-unifont \
+    libva libva-intel-driver intel-media-driver xdg-utils \
     at-spi2-core vulkan-icd-loader libappindicator-gtk3
 }
 

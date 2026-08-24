@@ -17,6 +17,8 @@ services:
       GROK_BOT_HOME: /opt/Grok_Bot
       GROK_BOT_NO_SANDBOX: "1"
       HOME: /home/grok
+      LANG: ${LANG:-C.UTF-8}
+      LC_ALL: ${LC_ALL:-C.UTF-8}
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix:rw
       - ${XDG_RUNTIME_DIR:-/run/user/1000}:${XDG_RUNTIME_DIR:-/run/user/1000}:rw
