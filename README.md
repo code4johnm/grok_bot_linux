@@ -1,18 +1,23 @@
-# Grok Bot Linux (Ubuntu LTS + Rocky Linux)
+# Grok Bot Linux (Ubuntu LTS + Rocky Linux + Kali)
 
-Stand-alone packaging for **two** products on **two first-class OS
+Stand-alone packaging for **two** products on **three first-class OS
 targets** (x86_64):
 
-| Role | OS |
-| --- | --- |
-| Primary desktop / common | **Ubuntu LTS** 24.04 / 26.04 |
-| Primary enterprise / RHEL-family | **Rocky Linux** 9 or 10 |
-| Debian cousins (same Ubuntu installer) | Debian, Linux Mint, Kali |
-| RHEL cousins (same Rocky installer) | RHEL, AlmaLinux |
-| Notes only | Fedora |
+| Role | OS | Installer |
+| --- | --- | --- |
+| Primary desktop / common | **Ubuntu LTS** 24.04 / 26.04 | `scripts/install-ubuntu.sh` |
+| Primary enterprise / RHEL-family | **Rocky Linux** 9 or 10 | `scripts/install-rocky.sh` |
+| Primary Debian-family rolling | **Kali Linux** | `scripts/install-kali.sh` |
+| Ubuntu cousins | Debian, Linux Mint | `install-ubuntu.sh` |
+| Rocky cousins | RHEL, AlmaLinux | `install-rocky.sh` |
+| Notes only | Fedora | — |
 
-Do not treat Rocky as “Ubuntu with dnf”. Package names, SELinux, and
-sandbox rules are a separate path: `scripts/install-rocky.sh`.
+**Install prefix on every dist (system):** `/opt/grok-bot`  
+Plus `/usr/local/bin/grok-bot` and `/usr/share/applications/grok-bot.desktop`.
+
+Do not treat Rocky as “Ubuntu with dnf”. Do not treat Kali as an unnamed
+Ubuntu cousin — it has its own installer. Package names, SELinux, and
+sandbox rules stay on the matching script.
 
 | Product | What it is | How it is installed |
 | --- | --- | --- |
@@ -91,11 +96,33 @@ sudo dnf install -y gtk3 libnotify nss libXScrnSaver libXtst xdg-utils \
   vulkan-loader libva liberation-fonts
 ```
 
-**Kali / Debian / Mint:** run the same `./scripts/install-ubuntu.sh`. Do not
-maintain a second package list. Ubuntu 24.04+ names (`libgtk-3-0t64`,
-`libasound2t64`, …) are tried first; classic names (`libgtk-3-0`,
-`libasound2`, …) are used when that is what apt can install. Aliases live in
-`scripts/debian-runtime-packages.sh`.
+## KALI (copy-paste)
+
+Kali Linux x86_64 (rolling). Same app prefix: `/opt/grok-bot`. Apt package
+names are the Ubuntu LTS list with Debian aliases
+(`scripts/debian-runtime-packages.sh`).
+
+```bash
+sudo apt-get update
+sudo apt-get install -y curl ca-certificates git tar
+git clone <this-repository> grok_bot_linux
+cd grok_bot_linux
+sudo ./scripts/install-kali.sh --system --with-cli
+# or: ./scripts/install-for.sh kali --system --with-cli
+grok-bot
+grok --version
+```
+
+Non-root:
+
+```bash
+./scripts/install-kali.sh --user --with-cli
+export PATH="$HOME/.local/bin:$HOME/.grok/bin:$PATH"
+grok-bot
+grok --version
+```
+
+**Debian / Mint:** `./scripts/install-ubuntu.sh` (same apt aliases).
 
 Optional packages:
 
@@ -108,18 +135,18 @@ sudo dnf install ./dist/grok-bot-0.24.0-1.*.rpm
 
 Do **not** install the macOS `.dmg` in Docker as a Linux implementation.
 
-## Ubuntu vs Rocky
+## Ubuntu vs Rocky vs Kali
 
-| Item | Ubuntu LTS | Rocky Linux 9/10 |
-| --- | --- | --- |
-| Installer | `scripts/install-ubuntu.sh` | `scripts/install-rocky.sh` |
-| Packages | apt (`debian-runtime-packages.sh`) | dnf (`rocky-runtime-packages.sh`) |
-| Desktop file | same `grok-bot.desktop` | same |
-| App prefix | `/opt/grok-bot` | `/opt/grok-bot` |
-| CLI | official `install.sh` | official `install.sh` |
-| Artifact | `.deb` | `.rpm` |
-| Hardening | AppArmor / userns | SELinux / userns |
-| Fallback | `GROK_BOT_NO_SANDBOX=1 grok-bot` | `GROK_BOT_NO_SANDBOX=1 grok-bot` |
+| Item | Ubuntu LTS | Rocky Linux 9/10 | Kali Linux |
+| --- | --- | --- | --- |
+| Installer | `scripts/install-ubuntu.sh` | `scripts/install-rocky.sh` | `scripts/install-kali.sh` |
+| Packages | apt (`debian-runtime-packages.sh`) | dnf (`rocky-runtime-packages.sh`) | apt (same Debian aliases) |
+| Desktop file | same `grok-bot.desktop` | same | same |
+| App prefix | `/opt/grok-bot` | `/opt/grok-bot` | `/opt/grok-bot` |
+| CLI | official `install.sh` | official `install.sh` | official `install.sh` |
+| Artifact | `.deb` | `.rpm` | `.deb` |
+| Hardening | AppArmor / userns | SELinux / userns | AppArmor / userns |
+| Fallback | `GROK_BOT_NO_SANDBOX=1 grok-bot` | `GROK_BOT_NO_SANDBOX=1 grok-bot` | `GROK_BOT_NO_SANDBOX=1 grok-bot` |
 
 Rocky is not Ubuntu. Do not pass Debian names (`libgtk-3-0`, `libasound2`) to
 `dnf`. `gtk3` and `alsa-lib` are the Rocky names.
@@ -324,12 +351,15 @@ Not available from the community port. Use the official CLI on aarch64.
 Canonical path other agents should call:
 
 ```text
-Install Grok Bot for ubuntu|rocky
+Install Grok Bot for ubuntu|rocky|kali
 
 ./scripts/install-for.sh ubuntu --system --with-cli
 ./scripts/install-for.sh rocky  --system --with-cli
+./scripts/install-for.sh kali   --system --with-cli
 ./scripts/install-for.sh auto   --with-cli
 ```
+
+System prefix on every dist: `/opt/grok-bot`.
 
 CLI only:
 

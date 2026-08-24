@@ -1,12 +1,13 @@
 VERSION := $(shell tr -d '[:space:]' < VERSION)
 
-.PHONY: help install uninstall deps docker-packages package docker-build docker-run check update check-update ubuntu-install rocky-install cli deb rpm
+.PHONY: help install uninstall deps docker-packages package docker-build docker-run check update check-update ubuntu-install rocky-install kali-install cli deb rpm
 
 help:
 	@echo "Targets:"
 	@echo "  make install           User-local app + runtime packages"
-	@echo "  make ubuntu-install    Ubuntu LTS helper (user-local; Debian/Kali ok)"
+	@echo "  make ubuntu-install    Ubuntu LTS helper (user-local; Debian/Mint ok)"
 	@echo "  make rocky-install     Rocky Linux helper (user-local; RHEL/Alma ok)"
+	@echo "  make kali-install      Kali Linux helper (user-local)"
 	@echo "  make cli               Official Grok CLI (\$HOME/.grok/bin)"
 	@echo "  make uninstall         Remove installed app files"
 	@echo "  make update            Update wrapper, Grok Bot, and runtime packages"
@@ -28,6 +29,9 @@ ubuntu-install:
 
 rocky-install:
 	./scripts/install-rocky.sh --user --with-cli
+
+kali-install:
+	./scripts/install-kali.sh --user --with-cli
 
 cli:
 	./scripts/install-cli.sh

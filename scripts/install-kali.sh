@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Ubuntu LTS x86_64 installer for Grok Bot desktop (+ optional CLI).
+# Kali Linux x86_64 installer for Grok Bot desktop (+ optional CLI).
 #
-# Primary OS: Ubuntu 24.04 / 26.04 LTS, x86_64
-# Reuse:      Debian, Linux Mint, Kali — same script; package names that
-#             differ (t64 vs classic) are resolved in debian-runtime-packages.sh
+# Primary rolling Debian-family OS: Kali Linux x86_64 (apt).
+# Package names come from debian-runtime-packages.sh (Ubuntu LTS names first,
+# classic Debian/Kali aliases second). Same app layout as Ubuntu and Rocky.
 #
 # Default (non-root): $HOME/.local/opt/grok-bot
 # System (sudo):      /opt/grok-bot + /usr/local/bin/grok-bot
@@ -23,22 +23,12 @@ case "$ARCH" in
     ;;
 esac
 
-FAMILY="$(os_family)"
 ID="$(os_id)"
 VER="$(os_version_id)"
-if is_kali; then
-  die "Kali Linux is a first-class target. Use ./scripts/install-kali.sh"
+if ! is_kali; then
+  die "This helper is for Kali Linux. Detected: $ID $VER. Use ./scripts/install-ubuntu.sh or ./scripts/install-rocky.sh"
 fi
-if [[ "$FAMILY" != "debian" ]]; then
-  die "This helper is for Ubuntu LTS x86_64 (Debian/Mint reuse). Detected: $ID. Use ./scripts/install-rocky.sh or ./scripts/install-kali.sh"
-fi
-if is_ubuntu_lts; then
-  info "Ubuntu LTS $VER x86_64 (primary desktop target)"
-elif [[ "$ID" == "ubuntu" ]]; then
-  warn "Ubuntu $VER is not a listed LTS (22.04/24.04/26.04). Continuing with Ubuntu package names."
-else
-  warn "Not Ubuntu LTS ($ID $VER). Reusing the Ubuntu installer; dependency names are tweaked automatically (t64 vs classic)."
-fi
+info "Kali Linux $VER x86_64 (primary Debian-family rolling target)"
 
 SYSTEM_REQ=0
 USER_REQ=0

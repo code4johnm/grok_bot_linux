@@ -137,6 +137,11 @@ is_rhel_family() {
   return 1
 }
 
+# Primary Debian-family rolling target: Kali Linux x86_64.
+is_kali() {
+  [[ "$(os_id)" == "kali" ]]
+}
+
 os_family() {
   local id like
   if [[ ! -f /etc/os-release ]]; then

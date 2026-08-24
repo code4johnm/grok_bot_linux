@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Ubuntu LTS x86_64 is the canonical package list.
-# Debian, Mint, and Kali reuse it; only names that Ubuntu 24.04+ renamed
-# (t64 time_t transition) need an alias. debian_first() picks the first
-# name apt can actually install.
+# Ubuntu LTS x86_64 is the canonical apt package list.
+# Kali Linux (first-class rolling target) and Debian/Mint reuse it; only
+# names that Ubuntu 24.04+ renamed (t64) need an alias. debian_first()
+# picks the first name apt can actually install.
 #
 # Format of DEBIAN_PKG_ALIASES: Ubuntu LTS name first, Debian/Kali fallbacks after.
 
