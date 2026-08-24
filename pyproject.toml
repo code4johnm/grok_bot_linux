@@ -1,0 +1,15 @@
+[project]
+name = "grok-bot"
+version = "1.0.0"
+description = "Linux CLI and local daemon for the xAI Grok HTTP API"
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
+
+[project.scripts]
+grok-bot = "grok_bot.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
