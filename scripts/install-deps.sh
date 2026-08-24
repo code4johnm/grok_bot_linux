@@ -9,6 +9,8 @@ source "$ROOT/scripts/common.sh"
 source "$ROOT/scripts/debian-runtime-packages.sh"
 # shellcheck source=scripts/rocky-runtime-packages.sh
 source "$ROOT/scripts/rocky-runtime-packages.sh"
+# shellcheck source=scripts/kali-runtime-packages.sh
+source "$ROOT/scripts/kali-runtime-packages.sh"
 
 DRY_RUN=0
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
@@ -58,6 +60,37 @@ install_debian() {
     fi
   done
   [[ ${#pkgs[@]} -gt 0 ]] || die "no runtime packages could be resolved"
+  run apt-get install -y --no-install-recommends "${pkgs[@]}"
+}
+
+install_kali() {
+  local id ver first rest resolved
+  id="$(os_id)"
+  ver="$(os_version_id)"
+  info "Installing Kali Linux runtime packages (Debian names, apt-cache policy; $id $ver)"
+  info "Not installing Kali offensive metapackages"
+  run apt-get update -y
+  local pkgs=() p
+  for p in "${KALI_PKGS_COMMON[@]}"; do
+    if resolved="$(debian_first "$p")"; then
+      pkgs+=("$resolved")
+    else
+      warn "skipping unavailable package: $p"
+    fi
+  done
+  for p in "${KALI_PKG_ALIASES[@]}"; do
+    first="${p%% *}"
+    rest="${p#* }"
+    if resolved="$(debian_first $p)"; then
+      if [[ "$resolved" != "$first" ]]; then
+        info "Kali mapping: $first -> $resolved"
+      fi
+      pkgs+=("$resolved")
+    else
+      warn "skipping unavailable package set: $p"
+    fi
+  done
+  [[ ${#pkgs[@]} -gt 0 ]] || die "no Kali runtime packages could be resolved"
   run apt-get install -y --no-install-recommends "${pkgs[@]}"
 }
 
@@ -129,7 +162,13 @@ install_arch() {
 }
 
 case "$(os_family)" in
-  debian) install_debian ;;
+  debian)
+    if is_kali; then
+      install_kali
+    else
+      install_debian
+    fi
+    ;;
   rhel)   install_rhel ;;
   fedora) install_fedora ;;
   arch)   install_arch ;;

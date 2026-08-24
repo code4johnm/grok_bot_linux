@@ -108,6 +108,13 @@ os_version_id() {
   printf '%s\n' "${VERSION_ID:-unknown}"
 }
 
+os_id_like() {
+  # shellcheck disable=SC1091
+  [[ -f /etc/os-release ]] || { echo ""; return; }
+  . /etc/os-release
+  printf '%s\n' "${ID_LIKE:-}"
+}
+
 # Primary desktop target: Ubuntu LTS x86_64 (24.04, 26.04). 22.04 still works.
 is_ubuntu_lts() {
   [[ "$(os_id)" == "ubuntu" ]] || return 1
@@ -139,7 +146,11 @@ is_rhel_family() {
 
 # Primary Debian-family rolling target: Kali Linux x86_64.
 is_kali() {
-  [[ "$(os_id)" == "kali" ]]
+  [[ "$(os_id)" == "kali" ]] && return 0
+  case " $(os_id_like) " in
+    *" kali "*) return 0 ;;
+  esac
+  return 1
 }
 
 os_family() {

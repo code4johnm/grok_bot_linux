@@ -98,9 +98,8 @@ sudo dnf install -y gtk3 libnotify nss libXScrnSaver libXtst xdg-utils \
 
 ## KALI (copy-paste)
 
-Kali Linux x86_64 (rolling). Same app prefix: `/opt/grok-bot`. Apt package
-names are the Ubuntu LTS list with Debian aliases
-(`scripts/debian-runtime-packages.sh`).
+Kali Linux x86_64 (Debian/rolling, **not Ubuntu**). Desktop is often XFCE on
+X11. System prefix: `/opt/grok-bot`. Does not install offensive Kali tools.
 
 ```bash
 sudo apt-get update
@@ -111,9 +110,10 @@ sudo ./scripts/install-kali.sh --system --with-cli
 # or: ./scripts/install-for.sh kali --system --with-cli
 grok-bot
 grok --version
+echo "session=${XDG_SESSION_TYPE:-unknown}"
 ```
 
-Non-root:
+Non-root (docs still prefer `/opt/grok-bot` with `--system`):
 
 ```bash
 ./scripts/install-kali.sh --user --with-cli
@@ -122,7 +122,10 @@ grok-bot
 grok --version
 ```
 
-**Debian / Mint:** `./scripts/install-ubuntu.sh` (same apt aliases).
+Do not live as root. If the installer is run with sudo, launch `grok-bot` as
+a normal user.
+
+**Debian / Mint:** `./scripts/install-ubuntu.sh`.
 
 Optional packages:
 
@@ -140,13 +143,42 @@ Do **not** install the macOS `.dmg` in Docker as a Linux implementation.
 | Item | Ubuntu LTS | Rocky Linux 9/10 | Kali Linux |
 | --- | --- | --- | --- |
 | Installer | `scripts/install-ubuntu.sh` | `scripts/install-rocky.sh` | `scripts/install-kali.sh` |
-| Packages | apt (`debian-runtime-packages.sh`) | dnf (`rocky-runtime-packages.sh`) | apt (same Debian aliases) |
-| Desktop file | same `grok-bot.desktop` | same | same |
+| Packages | apt | dnf | apt |
+| Desktop | do not assume; GNOME common | do not assume | XFCE common, do not assume GNOME |
 | App prefix | `/opt/grok-bot` | `/opt/grok-bot` | `/opt/grok-bot` |
 | CLI | official `install.sh` | official `install.sh` | official `install.sh` |
 | Artifact | `.deb` | `.rpm` | `.deb` |
-| Hardening | AppArmor / userns | SELinux / userns | AppArmor / userns |
-| Fallback | `GROK_BOT_NO_SANDBOX=1 grok-bot` | `GROK_BOT_NO_SANDBOX=1 grok-bot` | `GROK_BOT_NO_SANDBOX=1 grok-bot` |
+| Hardening | AppArmor / userns | SELinux / userns | sandbox + rolling-lib drift |
+| Fallback | `grok-bot --no-sandbox` | `grok-bot --no-sandbox` | `grok-bot --no-sandbox` |
+
+Kali is Debian/rolling, **not Ubuntu**. Probe classic Debian names with
+`apt-cache policy`, then install the first name that has a Candidate.
+
+**Kali package mapping** (classic Debian name → name that apt can install on
+current Kali rolling; recorded from `apt-cache policy`):
+
+| Debian / docs name | Kali rolling equivalent |
+| --- | --- |
+| `libgtk-3-0` | `libgtk-3-0t64` |
+| `libasound2` | `libasound2t64` |
+| `libatk-bridge2.0-0` | `libatk-bridge2.0-0t64` |
+| `libatspi2.0-0` | `libatspi2.0-0t64` |
+| `libcups2` | `libcups2t64` |
+| `libfuse2` | none (optional; tarball does not need it) |
+| `libnotify4` `libnss3` `libxss1` `libxtst6` `xdg-utils` `libgbm1` `libdrm2` `libxkbcommon0` | same name |
+
+**Kali chrome-sandbox**
+
+```bash
+sudo chown root:root /opt/grok-bot/chrome-sandbox
+sudo chmod 4755 /opt/grok-bot/chrome-sandbox
+grok-bot
+# if it fails (userns / AppArmor / rolling-lib drift):
+GROK_BOT_NO_SANDBOX=1 grok-bot
+```
+
+Do not operate the GUI as root. Check `$XDG_SESSION_TYPE` (`x11` is typical
+on XFCE; if `wayland`, try `ELECTRON_OZONE_PLATFORM_HINT=x11`).
 
 Rocky is not Ubuntu. Do not pass Debian names (`libgtk-3-0`, `libasound2`) to
 `dnf`. `gtk3` and `alsa-lib` are the Rocky names.
@@ -356,10 +388,11 @@ Install Grok Bot for ubuntu|rocky|kali
 ./scripts/install-for.sh ubuntu --system --with-cli
 ./scripts/install-for.sh rocky  --system --with-cli
 ./scripts/install-for.sh kali   --system --with-cli
-./scripts/install-for.sh auto   --with-cli
+./scripts/install-for.sh auto   --system --with-cli
 ```
 
-System prefix on every dist: `/opt/grok-bot`.
+Detection (`auto`): `/etc/os-release` — kali (`ID` or `ID_LIKE`) first, then
+ubuntu/debian/linuxmint, then rocky/rhel/centos. Prefix: `/opt/grok-bot`.
 
 CLI only:
 

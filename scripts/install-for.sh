@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Dispatcher for other agents: Install Grok Bot for ubuntu|rocky|kali
-#
-#   ./scripts/install-for.sh ubuntu [--system|--user] [--with-cli]
-#   ./scripts/install-for.sh rocky  [--system|--user] [--with-cli]
-#   ./scripts/install-for.sh kali   [--system|--user] [--with-cli]
+# Dispatcher: Install Grok Bot for ubuntu|rocky|kali
+# Detection (auto): /etc/os-release
+#   1. ID=kali or ID_LIKE contains kali → install-kali.sh
+#   2. ID=ubuntu|debian|linuxmint (and not kali) → install-ubuntu.sh
+#   3. ID=rocky or ID_LIKE contains rhel/centos → install-rocky.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/common.sh
@@ -11,6 +11,35 @@ source "$ROOT/scripts/common.sh"
 
 TARGET="${1:-}"
 shift || true
+
+detect_target() {
+  local id like
+  id="$(os_id)"
+  like=" $(os_id_like) "
+  if [[ "$id" == "kali" || "$like" == *" kali "* ]]; then
+    echo kali
+    return
+  fi
+  case "$id" in
+    ubuntu|debian|linuxmint)
+      echo ubuntu
+      return
+      ;;
+    rocky|almalinux|rhel|centos)
+      echo rocky
+      return
+      ;;
+  esac
+  if [[ "$like" == *" rhel "* || "$like" == *" centos "* ]]; then
+    echo rocky
+    return
+  fi
+  if [[ "$like" == *" ubuntu "* || "$like" == *" debian "* ]]; then
+    echo ubuntu
+    return
+  fi
+  echo unknown
+}
 
 case "$TARGET" in
   ubuntu|debian|mint)
@@ -23,14 +52,12 @@ case "$TARGET" in
     exec "$ROOT/scripts/install-kali.sh" "$@"
     ;;
   auto|"")
-    if is_kali; then
-      exec "$ROOT/scripts/install-kali.sh" "$@"
-    fi
-    case "$(os_family)" in
-      debian) exec "$ROOT/scripts/install-ubuntu.sh" "$@" ;;
-      rhel)   exec "$ROOT/scripts/install-rocky.sh" "$@" ;;
+    case "$(detect_target)" in
+      kali)   exec "$ROOT/scripts/install-kali.sh" "$@" ;;
+      ubuntu) exec "$ROOT/scripts/install-ubuntu.sh" "$@" ;;
+      rocky)  exec "$ROOT/scripts/install-rocky.sh" "$@" ;;
       *)
-        die "cannot auto-detect a first-class target (need Ubuntu LTS, Rocky Linux, or Kali). Pass ubuntu, rocky, or kali."
+        die "cannot auto-detect a first-class target from /etc/os-release. Pass ubuntu, rocky, or kali."
         ;;
     esac
     ;;
@@ -40,8 +67,8 @@ Usage: $0 ubuntu|rocky|kali|auto [install flags]
 
   ubuntu   Ubuntu LTS x86_64 (Debian/Mint reuse)
   rocky    Rocky Linux 9/10 x86_64 (RHEL/Alma reuse)
-  kali     Kali Linux x86_64 (rolling Debian-family)
-  auto     Pick from /etc/os-release
+  kali     Kali Linux x86_64 (Debian/rolling, not Ubuntu)
+  auto     /etc/os-release: kali, then ubuntu/debian/mint, then rocky/rhel
 
 System prefix on every dist: /opt/grok-bot
 
