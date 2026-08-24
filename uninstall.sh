@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+# shellcheck source=scripts/common.sh
+source "$ROOT/scripts/common.sh"
+
+PREFIX="${1:-$HOME/.local}"
+OPT_DIR="${GROK_BOT_HOME:-$PREFIX/opt/Grok_Bot}"
+BIN_DIR="$PREFIX/bin"
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+
+info "Removing $OPT_DIR"
+rm -rf "$OPT_DIR"
+
+rm -f "$BIN_DIR/grok-bot" "$BIN_DIR/grokbot"
+rm -f "$DATA_HOME/applications/grok-bot.desktop"
+rm -f "$HOME/Desktop/grok-bot.desktop"
+rm -f "$DATA_HOME/icons/hicolor/256x256/apps/grok-bot.png"
+
+if [[ -d /usr/local/share/applications ]]; then
+  rm -f /usr/local/share/applications/grok-bot.desktop 2>/dev/null || true
+fi
+
+info "Uninstalled application files."
+log "User data left in place: ~/.grokbot  ~/.config/Grok Bot  ~/.cache/grok-bot"
+log "Remove those directories yourself if you want a clean slate."

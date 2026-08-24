@@ -1,3 +1,0 @@
-# Runtime code uses the Python 3.11+ standard library only.
-# Pins below are for make test / CI (offline HTTP is mocked).
-pytest==8.3.5
