@@ -8,9 +8,30 @@ PREFIX="${1:-$HOME/.local}"
 OPT_DIR="${GROK_BOT_HOME:-$PREFIX/opt/Grok_Bot}"
 BIN_DIR="$PREFIX/bin"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+PACKAGING_DIR="${GROK_BOT_LINUX_HOME:-$PREFIX/opt/grok_bot_linux}"
+if [[ -f "$PACKAGING_DIR/install.conf" ]]; then
+  # shellcheck disable=SC1091
+  source "$PACKAGING_DIR/install.conf"
+fi
 
 info "Removing $OPT_DIR"
-rm -rf "$OPT_DIR"
+rm -rf "$OPT_DIR" "$OPT_DIR.next" "$OPT_DIR.prev"
+
+if have systemctl; then
+  systemctl --user disable --now grok-bot-update.timer >/dev/null 2>&1 || true
+  rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/grok-bot-update."{service,timer}
+  systemctl --user daemon-reload >/dev/null 2>&1 || true
+  if is_root; then
+    systemctl disable --now grok-bot-update.timer >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/grok-bot-update.{service,timer}
+    systemctl daemon-reload >/dev/null 2>&1 || true
+  fi
+fi
+
+if [[ "$(readlink -f "$PACKAGING_DIR")" != "$(readlink -f "$ROOT")" ]]; then
+  info "Removing $PACKAGING_DIR"
+  rm -rf "$PACKAGING_DIR"
+fi
 
 rm -f "$BIN_DIR/grok-bot" "$BIN_DIR/grokbot"
 rm -f "$DATA_HOME/applications/grok-bot.desktop"

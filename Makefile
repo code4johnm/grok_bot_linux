@@ -1,11 +1,13 @@
 VERSION := $(shell tr -d '[:space:]' < VERSION)
 
-.PHONY: help install uninstall deps docker-packages package docker-build docker-run check
+.PHONY: help install uninstall deps docker-packages package docker-build docker-run check update check-update
 
 help:
 	@echo "Targets:"
 	@echo "  make install           Install app + runtime packages"
 	@echo "  make uninstall         Remove installed app files"
+	@echo "  make update            Update wrapper, Grok Bot, and runtime packages"
+	@echo "  make check-update      Show available updates"
 	@echo "  make deps              Install GTK/Electron/VA-API packages"
 	@echo "  make docker-packages   Install Docker Engine + Compose"
 	@echo "  make package           Build dist/grok_bot_linux-$(VERSION)-linux-x64.tar.gz"
@@ -18,6 +20,12 @@ install:
 
 uninstall:
 	./uninstall.sh
+
+update:
+	./scripts/update.sh
+
+check-update:
+	./scripts/update.sh --check
 
 deps:
 	./scripts/install-deps.sh

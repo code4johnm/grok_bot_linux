@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Grok Bot update check
+
+[Timer]
+OnCalendar=daily
+OnBootSec=10min
+Persistent=true
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target

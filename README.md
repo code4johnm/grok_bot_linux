@@ -38,6 +38,7 @@ grok-bot
 | `--skip-deps` | Skip OS package install |
 | `--download` | Re-fetch the app tarball |
 | `--no-sandbox-ok` | Skip setuid on `chrome-sandbox` |
+| `--no-auto-update` | Skip the daily systemd update timer |
 
 Uninstall:
 
@@ -46,6 +47,32 @@ Uninstall:
 ```
 
 User data in `~/.grokbot` and `~/.config/Grok Bot` is left in place.
+
+## Updates
+
+`grok-bot update` refreshes three things when a newer version exists:
+
+1. **This Linux package** (`code4johnm/grok_bot_linux` on GitHub) — launcher, icon, scripts
+2. **Grok Bot** — the Electron app from [Nichokas/grokbot-linux-port](https://github.com/Nichokas/grokbot-linux-port/releases)
+3. **Runtime packages** — GTK, NSS, VA-API, and the other libraries `install-deps.sh` manages
+
+```bash
+grok-bot update              # apply whatever is newer
+grok-bot update --check      # report only
+grok-bot update --app-only   # Electron payload
+grok-bot update --self-only  # launcher / packaging
+grok-bot update --deps-only  # OS packages (needs sudo)
+make update
+```
+
+If Grok Bot is running, the new app is staged and swapped in on the next launch instead of overwriting a live process.
+
+Automatic updates run:
+
+- Daily via a systemd user timer (`grok-bot-update.timer`)
+- At most once per day when you start `grok-bot`
+
+Turn them off with `GROK_BOT_NO_AUTO_UPDATE=1`, or install with `./install.sh --no-auto-update`. Logs: `~/.cache/grok-bot/update.log`.
 
 ## Docker
 
@@ -100,6 +127,7 @@ install.sh / uninstall.sh / launch.sh
 scripts/install-deps.sh      GTK, NSS, ALSA, libva, i965, intel-media
 scripts/install-docker.sh    docker.io, compose, containerd, docker group
 scripts/download-app.sh      bundle or fetch Grok_Bot_<ver>_linux_x64.tar.gz
+scripts/update.sh            wrapper + app + OS package updates
 scripts/build-package.sh     dist/*.tar.gz
 docker/Dockerfile            debian:bookworm-slim + Electron deps
 docker/docker-compose.yml    X11 + /dev/dri

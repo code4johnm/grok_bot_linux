@@ -1,0 +1,9 @@
+[Unit]
+Description=Update Grok Bot Linux, Grok Bot, and runtime packages
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Nice=10
+ExecStart=@PACKAGING@/scripts/update.sh --auto --notify

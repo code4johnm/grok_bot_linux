@@ -29,7 +29,7 @@ mkdir -p "$STAGE/app"
 cp -a "$ROOT/app"/. "$STAGE/app"/
 chmod 0755 "$STAGE/app/chrome-sandbox" "$STAGE/app/grok-bot" 2>/dev/null || true
 chmod 0755 "$STAGE/install.sh" "$STAGE/uninstall.sh" "$STAGE/launch.sh" \
-  "$STAGE/scripts/"*.sh "$STAGE/docker/entrypoint.sh"
+  "$STAGE/scripts/"*.sh "$STAGE/docker/entrypoint.sh" "$STAGE/share/grok-bot-wrapper.in"
 
 # Drop leftover SUID from a live install copy so the archive is portable.
 if [[ -u "$STAGE/app/chrome-sandbox" ]]; then

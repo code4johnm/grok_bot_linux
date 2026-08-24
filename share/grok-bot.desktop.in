@@ -11,3 +11,8 @@ MimeType=x-scheme-handler/grokbot;
 Terminal=false
 StartupNotify=true
 Keywords=Grok;xAI;AI;Agent;
+Actions=update;
+
+[Desktop Action update]
+Name=Update Grok Bot
+Exec=@BIN@ update --notify

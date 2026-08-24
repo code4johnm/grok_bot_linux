@@ -11,6 +11,7 @@ SKIP_DEPS=0
 SKIP_SANDBOX=0
 FORCE_DOWNLOAD=0
 SYSTEM=0
+NO_AUTO_UPDATE=0
 
 usage() {
   cat <<EOF
@@ -22,6 +23,7 @@ Usage: $0 [options]
   --skip-deps        Skip apt/dnf/pacman runtime packages
   --no-sandbox-ok    Do not try to setuid chrome-sandbox
   --download         Re-fetch the app even if a copy is already present
+  --no-auto-update   Do not install the daily systemd update timer
   -h, --help         Show this help
 
 After install:
@@ -38,6 +40,7 @@ while [[ $# -gt 0 ]]; do
     --skip-deps) SKIP_DEPS=1; shift ;;
     --no-sandbox-ok) SKIP_SANDBOX=1; shift ;;
     --download) FORCE_DOWNLOAD=1; shift ;;
+    --no-auto-update) NO_AUTO_UPDATE=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown option: $1" ;;
   esac
@@ -47,10 +50,12 @@ if [[ "$SYSTEM" -eq 1 ]]; then
   OPT_DIR="${GROK_BOT_HOME:-/opt/Grok_Bot}"
   BIN_DIR="$PREFIX/bin"
   DATA_HOME="${XDG_DATA_HOME:-/usr/local/share}"
+  PACKAGING_DIR="${GROK_BOT_LINUX_HOME:-/usr/local/opt/grok_bot_linux}"
 else
   OPT_DIR="${GROK_BOT_HOME:-$PREFIX/opt/Grok_Bot}"
   BIN_DIR="$PREFIX/bin"
   DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+  PACKAGING_DIR="${GROK_BOT_LINUX_HOME:-$PREFIX/opt/grok_bot_linux}"
 fi
 
 info "Grok Bot Linux $VERSION"
@@ -80,8 +85,35 @@ else
   chmod 755 "$OPT_DIR/grok-bot" "$OPT_DIR/chrome-sandbox" 2>/dev/null || true
 fi
 
+info "Installing packaging files to $PACKAGING_DIR"
+if [[ "$(readlink -f "$ROOT")" != "$(readlink -f "$PACKAGING_DIR")" ]]; then
+  mkdir -p "$PACKAGING_DIR"
+  for item in install.sh uninstall.sh launch.sh VERSION Makefile README.md LICENSE scripts share docker; do
+    if [[ -e "$ROOT/$item" ]]; then
+      rm -rf "$PACKAGING_DIR/$item"
+      cp -a "$ROOT/$item" "$PACKAGING_DIR/$item"
+    fi
+  done
+fi
+chmod 0755 "$PACKAGING_DIR/install.sh" "$PACKAGING_DIR/uninstall.sh" "$PACKAGING_DIR/launch.sh" \
+  "$PACKAGING_DIR/scripts/"*.sh 2>/dev/null || true
+cat > "$PACKAGING_DIR/install.conf" <<EOF
+PREFIX="$PREFIX"
+OPT_DIR="$OPT_DIR"
+BIN_DIR="$BIN_DIR"
+DATA_HOME="$DATA_HOME"
+SYSTEM="$SYSTEM"
+PACKAGING_DIR="$PACKAGING_DIR"
+EOF
+if git -C "$ROOT" rev-parse HEAD >/dev/null 2>&1; then
+  git -C "$ROOT" rev-parse HEAD > "$PACKAGING_DIR/.wrapper-revision"
+fi
+printf '%s\n' "$VERSION" > "$OPT_DIR/GROK_BOT_VERSION"
+
 info "Installing launcher"
-install -m 0755 "$ROOT/launch.sh" "$BIN_DIR/grok-bot"
+mkdir -p "$BIN_DIR"
+sed -e "s|@PACKAGING@|$PACKAGING_DIR|" "$ROOT/share/grok-bot-wrapper.in" > "$BIN_DIR/grok-bot"
+chmod 0755 "$BIN_DIR/grok-bot"
 ln -sfn "$BIN_DIR/grok-bot" "$BIN_DIR/grokbot"
 
 if [[ -f "$ROOT/share/grok-bot.png" ]]; then
@@ -146,8 +178,32 @@ case ":$PATH:" in
     ;;
 esac
 
+if [[ "$NO_AUTO_UPDATE" -eq 0 ]] && have systemctl; then
+  if [[ "$SYSTEM" -eq 0 ]]; then
+    unit_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+    mkdir -p "$unit_dir"
+    sed -e "s|@PACKAGING@|$PACKAGING_DIR|" \
+      "$ROOT/share/grok-bot-update.service.in" > "$unit_dir/grok-bot-update.service"
+    install -m 0644 "$ROOT/share/grok-bot-update.timer.in" "$unit_dir/grok-bot-update.timer"
+    if systemctl --user daemon-reload >/dev/null 2>&1 \
+       && systemctl --user enable --now grok-bot-update.timer >/dev/null 2>&1; then
+      info "Daily auto-update timer enabled (systemd --user)"
+    else
+      warn "Could not enable systemd user timer; run: grok-bot update"
+    fi
+  elif is_root; then
+    sed -e "s|@PACKAGING@|$PACKAGING_DIR|" \
+      "$ROOT/share/grok-bot-update.service.in" > /etc/systemd/system/grok-bot-update.service
+    install -m 0644 "$ROOT/share/grok-bot-update.timer.in" /etc/systemd/system/grok-bot-update.timer
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl enable --now grok-bot-update.timer >/dev/null 2>&1 || \
+      warn "Could not enable system update timer"
+  fi
+fi
+
 info "Installed."
-log "Run:  grok-bot"
-log "Or:   $BIN_DIR/grok-bot"
+log "Run:     grok-bot"
+log "Update:  grok-bot update"
+log "Check:   grok-bot update --check"
 log "Docker GUI (after --with-docker and a re-login):"
 log "  docker compose -f $ROOT/docker/docker-compose.yml up --build"
