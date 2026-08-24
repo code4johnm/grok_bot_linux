@@ -7,6 +7,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/common.sh"
 # shellcheck source=scripts/debian-runtime-packages.sh
 source "$ROOT/scripts/debian-runtime-packages.sh"
+# shellcheck source=scripts/rocky-runtime-packages.sh
+source "$ROOT/scripts/rocky-runtime-packages.sh"
 
 DRY_RUN=0
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
@@ -59,9 +61,50 @@ install_debian() {
   run apt-get install -y --no-install-recommends "${pkgs[@]}"
 }
 
+dnf_first() {
+  local p
+  have dnf || return 1
+  for p in "$@"; do
+    if rpm -q "$p" >/dev/null 2>&1; then
+      printf '%s\n' "$p"
+      return 0
+    fi
+    if dnf list --available -q "$p" >/dev/null 2>&1; then
+      printf '%s\n' "$p"
+      return 0
+    fi
+  done
+  return 1
+}
+
+install_rhel() {
+  local id ver
+  id="$(os_id)"
+  ver="$(os_version_id)"
+  have dnf || die "dnf is required on Rocky/RHEL (not apt)"
+  info "Installing Rocky Linux runtime packages (RHEL-family aliases for $id $ver)"
+  run dnf makecache -y 2>/dev/null || run dnf check-update -y || true
+  local pkgs=() p resolved
+  for p in "${ROCKY_PKGS_COMMON[@]}"; do
+    if resolved="$(dnf_first "$p")"; then
+      pkgs+=("$resolved")
+    else
+      warn "skipping unavailable package: $p"
+    fi
+  done
+  for p in "${ROCKY_PKGS_OPTIONAL[@]}"; do
+    # shellcheck disable=SC2086
+    if resolved="$(dnf_first $p)"; then
+      pkgs+=("$resolved")
+    fi
+  done
+  [[ ${#pkgs[@]} -gt 0 ]] || die "no Rocky runtime packages could be resolved"
+  run dnf install -y "${pkgs[@]}"
+}
+
 install_fedora() {
-  warn "Primary target is Ubuntu LTS x86_64; Fedora is best-effort"
-  info "Installing Fedora/RHEL runtime packages"
+  warn "Fedora is not a first-class target (use Rocky Linux 9/10). Best-effort dnf set."
+  info "Installing Fedora runtime packages"
   run dnf install -y \
     gtk3 nss libXScrnSaver alsa-lib mesa-libgbm libdrm libxkbcommon \
     libXcomposite libXdamage libXrandr libXfixes libXtst cups-libs \
@@ -87,6 +130,7 @@ install_arch() {
 
 case "$(os_family)" in
   debian) install_debian ;;
+  rhel)   install_rhel ;;
   fedora) install_fedora ;;
   arch)   install_arch ;;
   *)

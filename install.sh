@@ -177,10 +177,14 @@ if [[ "$SKIP_SANDBOX" -eq 0 ]]; then
   if sudo_cmd chown root:root "$OPT_DIR/chrome-sandbox" \
      && sudo_cmd chmod 4755 "$OPT_DIR/chrome-sandbox"; then
     info "chrome-sandbox is setuid root"
+    printf 'suid\n' > "$OPT_DIR/.sandbox-attempt" 2>/dev/null || true
   else
     warn "Could not setuid chrome-sandbox; launcher will use --no-sandbox"
+    printf 'no-sandbox\n' > "$OPT_DIR/.sandbox-attempt" 2>/dev/null || true
   fi
 fi
+
+selinux_restore_app "$OPT_DIR"
 
 va="$("$ROOT/scripts/detect-vaapi.sh" || true)"
 if [[ -n "$va" ]]; then
@@ -219,7 +223,11 @@ if [[ "$NO_AUTO_UPDATE" -eq 0 ]] && have systemctl; then
 fi
 
 if [[ "$WITH_CLI" -eq 1 ]]; then
-  "$ROOT/scripts/install-cli.sh"
+  if [[ "$SYSTEM" -eq 1 ]]; then
+    "$ROOT/scripts/install-cli.sh" --system-profile
+  else
+    "$ROOT/scripts/install-cli.sh"
+  fi
 fi
 
 info "Installed."

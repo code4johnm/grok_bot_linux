@@ -217,13 +217,19 @@ detect_libva_driver
 ensure_utf8_locale
 
 EXTRA=()
-# Chromium sandbox needs SUID root chrome-sandbox. Docker / unprivileged
-# installs fall back to --no-sandbox.
+SANDBOX_PATH=suid
+# Chromium sandbox needs SUID root chrome-sandbox. Docker, unprivileged
+# user namespaces, or SELinux denials fall back to --no-sandbox.
 if [[ -f /.dockerenv ]] || [[ -n "${GROK_BOT_NO_SANDBOX:-}" ]]; then
   EXTRA+=(--no-sandbox)
+  SANDBOX_PATH=no-sandbox
 elif [[ ! -u "$APP_DIR/chrome-sandbox" ]] || [[ "$(stat -c '%U' "$APP_DIR/chrome-sandbox" 2>/dev/null || true)" != "root" ]]; then
   EXTRA+=(--no-sandbox)
+  SANDBOX_PATH=no-sandbox
 fi
+mkdir -p "${XDG_CACHE_HOME:-$HOME/.cache}/grok-bot" 2>/dev/null || true
+printf '%s\n' "$SANDBOX_PATH" > "${XDG_CACHE_HOME:-$HOME/.cache}/grok-bot/sandbox-path" 2>/dev/null || true
+printf '%s\n' "$SANDBOX_PATH" > "$APP_DIR/.sandbox-path" 2>/dev/null || true
 
 export ELECTRON_OZONE_PLATFORM_HINT="${ELECTRON_OZONE_PLATFORM_HINT:-auto}"
 exec "$BIN" "${EXTRA[@]}" "$@"

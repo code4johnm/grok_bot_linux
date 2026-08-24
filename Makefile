@@ -1,11 +1,12 @@
 VERSION := $(shell tr -d '[:space:]' < VERSION)
 
-.PHONY: help install uninstall deps docker-packages package docker-build docker-run check update check-update ubuntu-install cli deb
+.PHONY: help install uninstall deps docker-packages package docker-build docker-run check update check-update ubuntu-install rocky-install cli deb rpm
 
 help:
 	@echo "Targets:"
 	@echo "  make install           User-local app + runtime packages"
 	@echo "  make ubuntu-install    Ubuntu LTS helper (user-local; Debian/Kali ok)"
+	@echo "  make rocky-install     Rocky Linux helper (user-local; RHEL/Alma ok)"
 	@echo "  make cli               Official Grok CLI (\$HOME/.grok/bin)"
 	@echo "  make uninstall         Remove installed app files"
 	@echo "  make update            Update wrapper, Grok Bot, and runtime packages"
@@ -14,6 +15,7 @@ help:
 	@echo "  make docker-packages   Install Docker Engine + Compose"
 	@echo "  make package           Build dist/grok_bot_linux-$(VERSION)-linux-x64.tar.gz"
 	@echo "  make deb               Build dist/grok-bot_$(VERSION)_amd64.deb"
+	@echo "  make rpm               Build dist/grok-bot-$(VERSION)-*.rpm"
 	@echo "  make docker-build      Build the GUI container image"
 	@echo "  make docker-run        Run Grok Bot in Docker (needs X11)"
 	@echo "  make check             Syntax-check scripts"
@@ -23,6 +25,9 @@ install:
 
 ubuntu-install:
 	./scripts/install-ubuntu.sh --user --with-cli
+
+rocky-install:
+	./scripts/install-rocky.sh --user --with-cli
 
 cli:
 	./scripts/install-cli.sh
@@ -47,6 +52,9 @@ package:
 
 deb:
 	./scripts/build-deb.sh
+
+rpm:
+	./scripts/build-rpm.sh
 
 docker-build:
 	docker compose -f docker/docker-compose.yml build

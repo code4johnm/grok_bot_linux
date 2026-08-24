@@ -1,8 +1,18 @@
-# Grok Bot Linux (Ubuntu LTS x86_64)
+# Grok Bot Linux (Ubuntu LTS + Rocky Linux)
 
-Stand-alone packaging for **two** products. **Primary OS: Ubuntu LTS
-(24.04 / 26.04), x86_64.** Debian, Linux Mint, and Kali reuse the same
-installer; only apt package names that Ubuntu renamed (`t64`) are tweaked.
+Stand-alone packaging for **two** products on **two first-class OS
+targets** (x86_64):
+
+| Role | OS |
+| --- | --- |
+| Primary desktop / common | **Ubuntu LTS** 24.04 / 26.04 |
+| Primary enterprise / RHEL-family | **Rocky Linux** 9 or 10 |
+| Debian cousins (same Ubuntu installer) | Debian, Linux Mint, Kali |
+| RHEL cousins (same Rocky installer) | RHEL, AlmaLinux |
+| Notes only | Fedora |
+
+Do not treat Rocky as “Ubuntu with dnf”. Package names, SELinux, and
+sandbox rules are a separate path: `scripts/install-rocky.sh`.
 
 | Product | What it is | How it is installed |
 | --- | --- | --- |
@@ -23,23 +33,22 @@ no working Grok Bot desktop tarball for arm64 at this time.
 
 Privacy: examples use `$HOME`, `/opt/grok-bot`, and `user@example.org` only.
 
-## Ubuntu install (copy-paste)
+## UBUNTU (copy-paste)
 
-On Ubuntu 26.04 LTS or 24.04 LTS (x86_64). Substitute your actual clone path.
-
-System-wide (recommended; needs sudo once):
+Ubuntu 26.04 LTS or 24.04 LTS, x86_64. Substitute your actual clone path.
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y curl ca-certificates tar
+sudo apt-get install -y curl ca-certificates git tar
 git clone <this-repository> grok_bot_linux
 cd grok_bot_linux
 sudo ./scripts/install-ubuntu.sh --system --with-cli
+# or: ./scripts/install-for.sh ubuntu --system --with-cli
 grok-bot
 grok --version
 ```
 
-Non-root (no `/opt`; still a full desktop + CLI):
+Non-root:
 
 ```bash
 ./scripts/install-ubuntu.sh --user --with-cli
@@ -48,20 +57,109 @@ grok-bot
 grok --version
 ```
 
+## ROCKY (copy-paste)
+
+Rocky Linux 9 or 10, x86_64. Same app prefix as Ubuntu: `/opt/grok-bot`.
+
+```bash
+sudo dnf install -y curl ca-certificates git tar
+git clone <this-repository> grok_bot_linux
+cd grok_bot_linux
+sudo ./scripts/install-rocky.sh --system --with-cli
+# or: ./scripts/install-for.sh rocky --system --with-cli
+grok-bot
+grok --version
+ldd /opt/grok-bot/grok-bot | grep "not found" || true
+```
+
+Non-root:
+
+```bash
+./scripts/install-rocky.sh --user --with-cli
+export PATH="$HOME/.local/bin:$HOME/.grok/bin:$PATH"
+grok-bot
+grok --version
+```
+
+Exact dnf runtime line (resolved by `scripts/install-deps.sh`; names are
+Rocky/RHEL, not Debian):
+
+```bash
+sudo dnf install -y gtk3 libnotify nss libXScrnSaver libXtst xdg-utils \
+  mesa-libgbm alsa-lib at-spi2-atk at-spi2-core libdrm libxkbcommon \
+  cups-libs libXcomposite libXdamage libXrandr libXfixes libsecret \
+  vulkan-loader libva liberation-fonts
+```
+
 **Kali / Debian / Mint:** run the same `./scripts/install-ubuntu.sh`. Do not
 maintain a second package list. Ubuntu 24.04+ names (`libgtk-3-0t64`,
 `libasound2t64`, …) are tried first; classic names (`libgtk-3-0`,
 `libasound2`, …) are used when that is what apt can install. Aliases live in
 `scripts/debian-runtime-packages.sh`.
 
-Optional `.deb` (amd64), if you built one on this tree:
+Optional packages:
 
 ```bash
-./scripts/build-deb.sh
+./scripts/build-deb.sh    # Ubuntu/Debian amd64
+./scripts/build-rpm.sh    # Rocky/RHEL x86_64
 sudo apt install ./dist/grok-bot_0.24.0_amd64.deb
+sudo dnf install ./dist/grok-bot-0.24.0-1.*.rpm
 ```
 
 Do **not** install the macOS `.dmg` in Docker as a Linux implementation.
+
+## Ubuntu vs Rocky
+
+| Item | Ubuntu LTS | Rocky Linux 9/10 |
+| --- | --- | --- |
+| Installer | `scripts/install-ubuntu.sh` | `scripts/install-rocky.sh` |
+| Packages | apt (`debian-runtime-packages.sh`) | dnf (`rocky-runtime-packages.sh`) |
+| Desktop file | same `grok-bot.desktop` | same |
+| App prefix | `/opt/grok-bot` | `/opt/grok-bot` |
+| CLI | official `install.sh` | official `install.sh` |
+| Artifact | `.deb` | `.rpm` |
+| Hardening | AppArmor / userns | SELinux / userns |
+| Fallback | `GROK_BOT_NO_SANDBOX=1 grok-bot` | `GROK_BOT_NO_SANDBOX=1 grok-bot` |
+
+Rocky is not Ubuntu. Do not pass Debian names (`libgtk-3-0`, `libasound2`) to
+`dnf`. `gtk3` and `alsa-lib` are the Rocky names.
+
+**SELinux (Rocky).** Check `getenforce`. If `Enforcing`, the installer runs
+`restorecon -Rv /opt/grok-bot`. It will **not** run `setenforce 0`. If
+`chrome-sandbox` still fails:
+
+```bash
+sudo ausearch -m avc -ts recent
+# then, as a documented fallback only:
+GROK_BOT_NO_SANDBOX=1 grok-bot
+```
+
+Do not open firewalld ports. Login uses outbound HTTPS; browser callbacks
+are localhost (no extra ports).
+
+**Verify on Rocky**
+
+```bash
+grok --version
+grok-bot --version || true
+ldd /opt/grok-bot/grok-bot | grep "not found" || true
+cat /opt/grok-bot/.sandbox-path 2>/dev/null || true
+getenforce
+```
+
+**Common Rocky failures**
+
+- missing `nss` / `gtk3` — `./scripts/install-deps.sh`
+- `chrome-sandbox` setuid ignored — userns or SELinux; use `--no-sandbox` fallback
+- SELinux AVC on `/opt/grok-bot` — `restorecon -Rv /opt/grok-bot`, then ausearch
+- Wayland on recent Rocky spins — `ELECTRON_OZONE_PLATFORM_HINT=x11 grok-bot`
+- old NVIDIA/GBM — update mesa/`mesa-libgbm`, or run on X11
+
+**CLI PATH on Rocky** (desktop sessions often skip `.profile`):
+
+- `$HOME/.bashrc` and `$HOME/.profile` (always)
+- `$HOME/.config/environment.d/grok.conf` (systemd user environment)
+- `/etc/profile.d/grok.sh` when installing `--system --with-cli`
 
 ## Layout
 
@@ -177,9 +275,10 @@ If the GUI is running, a new app is staged and swapped in on the next launch.
 
 ```bash
 ./uninstall.sh
-# or
 ./scripts/uninstall.sh
-sudo apt remove grok-bot     # if installed from the .deb
+./scripts/uninstall-rocky.sh   # Rocky: also drops /etc/profile.d/grok.sh
+sudo apt remove grok-bot       # .deb
+sudo dnf remove grok-bot       # .rpm
 ```
 
 User data in `$HOME/.grokbot`, `$HOME/.config/Grok Bot`, `$HOME/.grok`, and
@@ -205,8 +304,10 @@ The launcher sets `ELECTRON_OZONE_PLATFORM_HINT=auto`. Force X11:
 `GDK_BACKEND=x11 grok-bot` or `ELECTRON_OZONE_PLATFORM_HINT=x11 grok-bot`.
 
 **Unprivileged user namespaces**
-If the kernel disables them, setuid `chrome-sandbox` is required. Do not
-disable AppArmor globally; use `--no-sandbox` only as a fallback.
+If the kernel disables them, setuid `chrome-sandbox` is required. Ubuntu:
+do not disable AppArmor globally. Rocky: do not `setenforce 0`. Use
+`--no-sandbox` only as a fallback. The launcher writes `suid` or
+`no-sandbox` to `/opt/grok-bot/.sandbox-path`.
 
 **Tofu / missing CJK or emoji**
 The launcher forces a UTF-8 locale when `LANG` is `C`/`POSIX`. Install Noto
@@ -220,16 +321,14 @@ Not available from the community port. Use the official CLI on aarch64.
 
 ## For other agents
 
-Canonical path other agents should call (Ubuntu LTS x86_64):
+Canonical path other agents should call:
 
 ```text
-./scripts/install-ubuntu.sh --system --with-cli
-```
+Install Grok Bot for ubuntu|rocky
 
-Non-root:
-
-```text
-./scripts/install-ubuntu.sh --user --with-cli
+./scripts/install-for.sh ubuntu --system --with-cli
+./scripts/install-for.sh rocky  --system --with-cli
+./scripts/install-for.sh auto   --with-cli
 ```
 
 CLI only:

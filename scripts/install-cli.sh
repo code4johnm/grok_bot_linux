@@ -7,7 +7,18 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT/scripts/common.sh"
 
 FORCE=0
-[[ "${1:-}" == "--force" ]] && FORCE=1
+SYSTEM_PROFILE=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --force) FORCE=1; shift ;;
+    --system-profile) SYSTEM_PROFILE=1; shift ;;
+    -h|--help)
+      echo "Usage: $0 [--force] [--system-profile]"
+      exit 0
+      ;;
+    *) die "unknown option: $1" ;;
+  esac
+done
 
 CLI_BIN="${GROK_BIN_DIR:-$HOME/.grok/bin}"
 OFFICIAL_INSTALLER="https://x.ai/cli/install.sh"
@@ -38,6 +49,34 @@ else
 fi
 
 ensure_path_block
+
+# Desktop (non-login) sessions on systemd: $HOME/.config/environment.d
+env_dir="${XDG_CONFIG_HOME:-$HOME/.config}/environment.d"
+mkdir -p "$env_dir"
+if [[ ! -f "$env_dir/grok.conf" ]]; then
+  printf 'PATH=%%h/.grok/bin:/usr/local/bin:/usr/bin:/bin\n' > "$env_dir/grok.conf"
+  info "Wrote \$HOME/.config/environment.d/grok.conf (re-login for GUI apps)"
+fi
+
+if [[ "$SYSTEM_PROFILE" -eq 1 ]]; then
+  if is_root; then
+    cat > /etc/profile.d/grok.sh <<'EOF'
+# Official Grok CLI (per-user). Adds $HOME/.grok/bin when present.
+# Does not change sudoers. Outbound HTTPS only; no firewalld ports.
+if [ -d "$HOME/.grok/bin" ]; then
+  case ":$PATH:" in
+    *":$HOME/.grok/bin:"*) ;;
+    *) PATH="$HOME/.grok/bin:$PATH" ;;
+  esac
+  export PATH
+fi
+EOF
+    chmod 0644 /etc/profile.d/grok.sh
+    info "Wrote /etc/profile.d/grok.sh"
+  else
+    warn "skipping /etc/profile.d/grok.sh (not root)"
+  fi
+fi
 
 # Current session
 case ":$PATH:" in

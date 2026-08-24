@@ -108,7 +108,7 @@ os_version_id() {
   printf '%s\n' "${VERSION_ID:-unknown}"
 }
 
-# Primary target is Ubuntu LTS x86_64 (24.04, 26.04). 22.04 still works.
+# Primary desktop target: Ubuntu LTS x86_64 (24.04, 26.04). 22.04 still works.
 is_ubuntu_lts() {
   [[ "$(os_id)" == "ubuntu" ]] || return 1
   case "$(os_version_id)" in
@@ -117,25 +117,69 @@ is_ubuntu_lts() {
   esac
 }
 
+# Primary enterprise target: Rocky Linux 9 or 10 x86_64.
+is_rocky() {
+  [[ "$(os_id)" == "rocky" ]]
+}
+
+is_rocky_supported() {
+  is_rocky || return 1
+  case "$(os_version_id)" in
+    9|9.*|10|10.*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+is_rhel_family() {
+  case "$(os_id)" in
+    rocky|almalinux|rhel|centos) return 0 ;;
+  esac
+  return 1
+}
+
 os_family() {
-  if [[ -f /etc/os-release ]]; then
-    # shellcheck disable=SC1091
-    . /etc/os-release
-    case "${ID_LIKE:-$ID}" in
-      *debian*|*ubuntu*|*linuxmint*|kali) echo debian ;;
-      *rhel*|*fedora*|*centos*)           echo fedora ;;
-      *arch*|arch)                        echo arch ;;
-      *)
-        case "$ID" in
-          debian|ubuntu|kali|linuxmint) echo debian ;;
-          fedora|rhel|centos|rocky|almalinux) echo fedora ;;
-          arch|manjaro|endeavouros) echo arch ;;
-          *) echo unknown ;;
-        esac
-        ;;
-    esac
-  else
+  local id like
+  if [[ ! -f /etc/os-release ]]; then
     echo unknown
+    return
+  fi
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  id="${ID:-unknown}"
+  like="${ID_LIKE:-}"
+  case "$id" in
+    ubuntu|debian|linuxmint|kali) echo debian; return ;;
+    rocky|almalinux|rhel|centos) echo rhel; return ;;
+    fedora) echo fedora; return ;;
+    arch|manjaro|endeavouros) echo arch; return ;;
+  esac
+  case "$like" in
+    *ubuntu*|*debian*|*linuxmint*|kali) echo debian ;;
+    *rhel*|*centos*) echo rhel ;;
+    *fedora*) echo fedora ;;
+    *arch*) echo arch ;;
+    *) echo unknown ;;
+  esac
+}
+
+selinux_mode() {
+  if have getenforce; then
+    getenforce 2>/dev/null | tr '[:upper:]' '[:lower:]' || echo disabled
+  else
+    echo disabled
+  fi
+}
+
+# Restore labels under the app dir. Never disable SELinux.
+selinux_restore_app() {
+  local dir="${1:-}"
+  [[ -n "$dir" && -d "$dir" ]] || return 0
+  [[ "$(selinux_mode)" == "enforcing" ]] || return 0
+  info "SELinux Enforcing; restorecon $dir (will not setenforce 0)"
+  if have restorecon; then
+    sudo_cmd restorecon -Rv "$dir" || warn "restorecon failed; inspect: sudo ausearch -m avc -ts recent"
+  else
+    warn "restorecon not installed; install policycoreutils and re-run restorecon -Rv $dir"
   fi
 }
 
