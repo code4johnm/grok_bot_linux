@@ -1,7 +1,0 @@
-dist
-.cache
-.git
-*.tar
-*.tar.gz
-*.AppImage
-**/.DS_Store
