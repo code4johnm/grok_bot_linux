@@ -1,4 +1,3 @@
-# Rules for the only tracked documentation in this stub tree.
 default: true
 MD013: false
 MD041: true
