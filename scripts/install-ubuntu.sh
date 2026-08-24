@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
-# Ubuntu LTS / Debian-family installer for Grok Bot desktop (+ optional CLI).
+# Ubuntu LTS x86_64 installer for Grok Bot desktop (+ optional CLI).
+#
+# Primary OS: Ubuntu 24.04 / 26.04 LTS, x86_64
+# Reuse:      Debian, Linux Mint, Kali — same script; package names that
+#             differ (t64 vs classic) are resolved in debian-runtime-packages.sh
 #
 # Default (non-root): $HOME/.local/opt/grok-bot
 # System (sudo):      /opt/grok-bot + /usr/local/bin/grok-bot
-#
-# Desktop port is x86_64 only. Official CLI also supports aarch64.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/common.sh
@@ -14,7 +16,7 @@ ARCH="$(uname -m)"
 case "$ARCH" in
   x86_64|amd64) ;;
   aarch64|arm64)
-    die "Grok Bot desktop Linux port is x86_64 only. Official CLI supports arm64: ./scripts/install-cli.sh"
+    die "Grok Bot desktop is x86_64 only on Linux. Official CLI supports arm64: ./scripts/install-cli.sh"
     ;;
   *)
     die "unsupported architecture: $ARCH (need x86_64)"
@@ -22,9 +24,17 @@ case "$ARCH" in
 esac
 
 FAMILY="$(os_family)"
+ID="$(os_id)"
+VER="$(os_version_id)"
 if [[ "$FAMILY" != "debian" ]]; then
-  warn "This helper targets Ubuntu LTS and Debian-family systems (Mint, Kali)."
-  warn "Detected family: $FAMILY — continuing with generic install.sh"
+  die "Primary target is Ubuntu LTS x86_64. This helper is Debian-compatible (Debian, Mint, Kali). Detected: $ID. Use ./install.sh on other families."
+fi
+if is_ubuntu_lts; then
+  info "Ubuntu LTS $VER x86_64 (primary target)"
+elif [[ "$ID" == "ubuntu" ]]; then
+  warn "Ubuntu $VER is not a listed LTS (22.04/24.04/26.04). Continuing with Ubuntu package names."
+else
+  warn "Not Ubuntu LTS ($ID $VER). Reusing the Ubuntu installer; dependency names are tweaked automatically (t64 vs classic)."
 fi
 
 SYSTEM_REQ=0
@@ -48,7 +58,7 @@ if [[ "$SYSTEM_REQ" -eq 1 ]]; then
     exec sudo --preserve-env=GROK_BOT_HOME,GROK_BOT_LINUX_HOME,GROK_BOT_CACHE,GROK_BIN_DIR \
       "$0" --system "${PASS[@]}"
   fi
-  info "Ubuntu/Debian system install -> /opt/grok-bot"
+  info "System install -> /opt/grok-bot"
   info "Grok Bot desktop: community Linux port (no official vendor .deb)"
   exec "$ROOT/install.sh" --system --opt-dir /opt/grok-bot "${PASS[@]}"
 fi

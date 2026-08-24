@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Install Electron/GTK runtime packages plus Intel VA-API drivers.
+# Canonical list: Ubuntu LTS x86_64. Debian/Kali reuse it via name aliases.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/common.sh
 source "$ROOT/scripts/common.sh"
+# shellcheck source=scripts/debian-runtime-packages.sh
+source "$ROOT/scripts/debian-runtime-packages.sh"
 
 DRY_RUN=0
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
@@ -31,52 +34,33 @@ debian_first() {
 }
 
 install_debian() {
-  info "Installing Debian/Ubuntu/Kali runtime packages"
+  local id ver
+  id="$(os_id)"
+  ver="$(os_version_id)"
+  info "Installing Ubuntu LTS runtime packages (Debian-compatible aliases for $id $ver)"
   run apt-get update -y
-  local pkgs=()
-  local p
-  for p in \
-      ca-certificates \
-      xdg-utils \
-      locales \
-      fonts-liberation \
-      fonts-noto-core \
-      fonts-noto-mono \
-      fonts-noto-ui-core \
-      fonts-noto-color-emoji \
-      fonts-noto-cjk \
-      fonts-unifont \
-      libnss3 \
-      libnotify4 \
-      libxss1 \
-      libxtst6 \
-      libgbm1 \
-      libdrm2 \
-      libxkbcommon0 \
-      libxcomposite1 \
-      libxdamage1 \
-      libxfixes3 \
-      libxrandr2 \
-      libsecret-1-0 \
-      libva2 \
-      libegl1 \
-      libgl1 \
-      libvulkan1 \
-      i965-va-driver \
-      intel-media-va-driver \
-      libayatana-appindicator3-1
-  do
-    debian_first "$p" >/dev/null && pkgs+=("$p")
+  local pkgs=() p resolved
+  for p in "${DEBIAN_PKGS_COMMON[@]}"; do
+    if resolved="$(debian_first "$p")"; then
+      pkgs+=("$resolved")
+    else
+      warn "skipping unavailable package: $p"
+    fi
   done
-  debian_first libgtk-3-0t64 libgtk-3-0 >/dev/null && pkgs+=("$(debian_first libgtk-3-0t64 libgtk-3-0)")
-  debian_first libasound2t64 libasound2 >/dev/null && pkgs+=("$(debian_first libasound2t64 libasound2)")
-  debian_first libcups2t64 libcups2 >/dev/null && pkgs+=("$(debian_first libcups2t64 libcups2)")
-  debian_first libatspi2.0-0t64 libatspi2.0-0 >/dev/null && pkgs+=("$(debian_first libatspi2.0-0t64 libatspi2.0-0)")
-  debian_first libfuse2t64 libfuse2 >/dev/null && pkgs+=("$(debian_first libfuse2t64 libfuse2)") || true
+  for p in "${DEBIAN_PKG_ALIASES[@]}"; do
+    # shellcheck disable=SC2086
+    if resolved="$(debian_first $p)"; then
+      pkgs+=("$resolved")
+    else
+      warn "skipping unavailable package set: $p"
+    fi
+  done
+  [[ ${#pkgs[@]} -gt 0 ]] || die "no runtime packages could be resolved"
   run apt-get install -y --no-install-recommends "${pkgs[@]}"
 }
 
 install_fedora() {
+  warn "Primary target is Ubuntu LTS x86_64; Fedora is best-effort"
   info "Installing Fedora/RHEL runtime packages"
   run dnf install -y \
     gtk3 nss libXScrnSaver alsa-lib mesa-libgbm libdrm libxkbcommon \
@@ -91,6 +75,7 @@ install_fedora() {
 }
 
 install_arch() {
+  warn "Primary target is Ubuntu LTS x86_64; Arch is best-effort"
   info "Installing Arch runtime packages"
   run pacman -Sy --needed --noconfirm \
     gtk3 nss libxss alsa-lib mesa libdrm libxkbcommon libxcomposite \

@@ -5,7 +5,7 @@ VERSION := $(shell tr -d '[:space:]' < VERSION)
 help:
 	@echo "Targets:"
 	@echo "  make install           User-local app + runtime packages"
-	@echo "  make ubuntu-install    Ubuntu/Debian helper (user-local)"
+	@echo "  make ubuntu-install    Ubuntu LTS helper (user-local; Debian/Kali ok)"
 	@echo "  make cli               Official Grok CLI (\$HOME/.grok/bin)"
 	@echo "  make uninstall         Remove installed app files"
 	@echo "  make update            Update wrapper, Grok Bot, and runtime packages"

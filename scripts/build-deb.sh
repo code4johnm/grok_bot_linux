@@ -63,7 +63,7 @@ Section: misc
 Priority: optional
 Architecture: ${arch}
 Maintainer: Grok Bot Linux packagers <user@example.org>
-Depends: libgtk-3-0 | libgtk-3-0t64, libnss3, libnotify4, libxss1, libxtst6, xdg-utils, libgbm1, libasound2 | libasound2t64, libdrm2, libxkbcommon0, libxcomposite1, libxdamage1, libxfixes3, libxrandr2, libsecret-1-0, libcups2 | libcups2t64
+Depends: libgtk-3-0t64 | libgtk-3-0, libnss3, libnotify4, libxss1, libxtst6, xdg-utils, libgbm1, libasound2t64 | libasound2, libdrm2, libxkbcommon0, libxcomposite1, libxdamage1, libxfixes3, libxrandr2, libsecret-1-0, libcups2t64 | libcups2
 Recommends: fonts-noto-core, fonts-noto-color-emoji, fonts-noto-cjk, fonts-liberation
 Homepage: https://x.ai/bot
 Description: Grok Bot desktop (community Linux port)

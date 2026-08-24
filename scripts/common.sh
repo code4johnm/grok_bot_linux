@@ -94,6 +94,29 @@ sudo_n() {
   fi
 }
 
+os_id() {
+  # shellcheck disable=SC1091
+  [[ -f /etc/os-release ]] || { echo unknown; return; }
+  . /etc/os-release
+  printf '%s\n' "${ID:-unknown}"
+}
+
+os_version_id() {
+  # shellcheck disable=SC1091
+  [[ -f /etc/os-release ]] || { echo unknown; return; }
+  . /etc/os-release
+  printf '%s\n' "${VERSION_ID:-unknown}"
+}
+
+# Primary target is Ubuntu LTS x86_64 (24.04, 26.04). 22.04 still works.
+is_ubuntu_lts() {
+  [[ "$(os_id)" == "ubuntu" ]] || return 1
+  case "$(os_version_id)" in
+    22.04|24.04|26.04) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 os_family() {
   if [[ -f /etc/os-release ]]; then
     # shellcheck disable=SC1091

@@ -1,7 +1,8 @@
-# Grok Bot Linux (Ubuntu LTS)
+# Grok Bot Linux (Ubuntu LTS x86_64)
 
-Stand-alone packaging for **two** products on Ubuntu LTS (x86_64) and other
-Debian-family systems (Debian, Linux Mint, Kali):
+Stand-alone packaging for **two** products. **Primary OS: Ubuntu LTS
+(24.04 / 26.04), x86_64.** Debian, Linux Mint, and Kali reuse the same
+installer; only apt package names that Ubuntu renamed (`t64`) are tweaked.
 
 | Product | What it is | How it is installed |
 | --- | --- | --- |
@@ -47,8 +48,11 @@ grok-bot
 grok --version
 ```
 
-Debian, Linux Mint, and Kali: the same scripts. Package names with a `t64`
-suffix (Ubuntu 24.04+) are selected automatically.
+**Kali / Debian / Mint:** run the same `./scripts/install-ubuntu.sh`. Do not
+maintain a second package list. Ubuntu 24.04+ names (`libgtk-3-0t64`,
+`libasound2t64`, …) are tried first; classic names (`libgtk-3-0`,
+`libasound2`, …) are used when that is what apt can install. Aliases live in
+`scripts/debian-runtime-packages.sh`.
 
 Optional `.deb` (amd64), if you built one on this tree:
 
@@ -216,7 +220,7 @@ Not available from the community port. Use the official CLI on aarch64.
 
 ## For other agents
 
-Canonical Ubuntu LTS (x86_64) path other bots should call:
+Canonical path other agents should call (Ubuntu LTS x86_64):
 
 ```text
 ./scripts/install-ubuntu.sh --system --with-cli
