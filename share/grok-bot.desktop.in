@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=Grok Bot
+GenericName=Grok desktop agent
+Comment=Official Grok Bot desktop app (community Linux port)
+Exec=@BIN@ %U
+Icon=@ICON@
+Type=Application
+Categories=Development;Utility;
+StartupWMClass=grok-bot
+MimeType=x-scheme-handler/grokbot;
+Terminal=false
+StartupNotify=true
+Keywords=Grok;xAI;AI;Agent;

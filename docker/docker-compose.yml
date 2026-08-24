@@ -1,0 +1,31 @@
+services:
+  grok-bot:
+    image: grok-bot-linux:0.24.0
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    network_mode: host
+    ipc: host
+    shm_size: "2gb"
+    environment:
+      DISPLAY: ${DISPLAY:-:0}
+      WAYLAND_DISPLAY: ${WAYLAND_DISPLAY:-}
+      XDG_RUNTIME_DIR: ${XDG_RUNTIME_DIR:-/run/user/1000}
+      XDG_SESSION_TYPE: ${XDG_SESSION_TYPE:-x11}
+      LIBVA_DRIVER_NAME: ${LIBVA_DRIVER_NAME:-}
+      PULSE_SERVER: unix:${XDG_RUNTIME_DIR:-/run/user/1000}/pulse/native
+      GROK_BOT_HOME: /opt/Grok_Bot
+      GROK_BOT_NO_SANDBOX: "1"
+      HOME: /home/grok
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - ${XDG_RUNTIME_DIR:-/run/user/1000}:${XDG_RUNTIME_DIR:-/run/user/1000}:rw
+      - ${HOME}/.grokbot:/home/grok/.grokbot
+      - ${HOME}/.config/Grok Bot:/home/grok/.config/Grok Bot
+      - ${GROK_BOT_HOME:-${HOME}/.local/opt/Grok_Bot}:/opt/Grok_Bot:ro
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - video
+    security_opt:
+      - seccomp:unconfined

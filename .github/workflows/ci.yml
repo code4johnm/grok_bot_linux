@@ -1,0 +1,17 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax-check shell scripts
+        run: |
+          bash -n install.sh uninstall.sh launch.sh
+          bash -n scripts/*.sh docker/entrypoint.sh
+      - name: Compose file parses
+        run: docker compose -f docker/docker-compose.yml config >/dev/null

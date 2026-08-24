@@ -1,0 +1,11 @@
+dist/
+app/*
+!app/README.md
+.cache/
+*.tar
+*.tar.gz
+*.AppImage
+*.img
+.DS_Store
+__pycache__/
+*.pyc
