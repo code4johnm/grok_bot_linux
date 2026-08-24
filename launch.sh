@@ -36,8 +36,16 @@ find_app_dir() {
       return 0
     fi
   fi
+  if [[ -x "${HOME}/.local/opt/grok-bot/grok-bot" ]]; then
+    printf '%s\n' "${HOME}/.local/opt/grok-bot"
+    return 0
+  fi
   if [[ -x "${HOME}/.local/opt/Grok_Bot/grok-bot" ]]; then
     printf '%s\n' "${HOME}/.local/opt/Grok_Bot"
+    return 0
+  fi
+  if [[ -x /opt/grok-bot/grok-bot ]]; then
+    printf '%s\n' /opt/grok-bot
     return 0
   fi
   if [[ -x /opt/Grok_Bot/grok-bot ]]; then
@@ -87,6 +95,10 @@ run_update() {
     updater="$ROOT/scripts/update.sh"
   elif [[ -x "${HOME}/.local/opt/grok_bot_linux/scripts/update.sh" ]]; then
     updater="${HOME}/.local/opt/grok_bot_linux/scripts/update.sh"
+  elif [[ -x /usr/lib/grok-bot-linux/scripts/update.sh ]]; then
+    updater=/usr/lib/grok-bot-linux/scripts/update.sh
+  elif [[ -x /usr/local/lib/grok-bot-linux/scripts/update.sh ]]; then
+    updater=/usr/local/lib/grok-bot-linux/scripts/update.sh
   elif [[ -x /usr/local/opt/grok_bot_linux/scripts/update.sh ]]; then
     updater=/usr/local/opt/grok_bot_linux/scripts/update.sh
   else

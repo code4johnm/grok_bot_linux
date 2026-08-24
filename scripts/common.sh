@@ -10,13 +10,26 @@ fi
 VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION" 2>/dev/null || echo 0.24.0)"
 APP_NAME="Grok Bot"
 APP_ID="grok-bot"
-DEFAULT_OPT_DIR="${GROK_BOT_HOME:-$HOME/.local/opt/Grok_Bot}"
+DEFAULT_OPT_DIR="${GROK_BOT_HOME:-$HOME/.local/opt/grok-bot}"
 DEFAULT_PACKAGING_DIR="${GROK_BOT_LINUX_HOME:-$HOME/.local/opt/grok_bot_linux}"
 
-WRAPPER_REPO="code4johnm/grok_bot_linux"
+# Wrapper GitHub repo is taken from origin (or GROK_BOT_LINUX_REPO). Not hardcoded.
+git_origin_repo() {
+  local url
+  url="$(git -C "${1:-$ROOT}" remote get-url origin 2>/dev/null || true)"
+  [[ -n "$url" ]] || return 1
+  printf '%s\n' "$url" | sed -E 's#.*github.com[:/]([^/]+/[^/.]+)(\.git)?.*#\1#'
+}
+
+WRAPPER_REPO="${GROK_BOT_LINUX_REPO:-$(git_origin_repo "$ROOT" 2>/dev/null || true)}"
 UPSTREAM_REPO="Nichokas/grokbot-linux-port"
-WRAPPER_COMMIT_API="https://api.github.com/repos/${WRAPPER_REPO}/commits/main"
-WRAPPER_TARBALL_URL="https://github.com/${WRAPPER_REPO}/archive/refs/heads/main.tar.gz"
+if [[ -n "$WRAPPER_REPO" ]]; then
+  WRAPPER_COMMIT_API="https://api.github.com/repos/${WRAPPER_REPO}/commits/main"
+  WRAPPER_TARBALL_URL="https://github.com/${WRAPPER_REPO}/archive/refs/heads/main.tar.gz"
+else
+  WRAPPER_COMMIT_API=""
+  WRAPPER_TARBALL_URL=""
+fi
 UPSTREAM_LATEST_API="https://api.github.com/repos/${UPSTREAM_REPO}/releases/latest"
 
 CACHE_DIR="${GROK_BOT_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/grok-bot}"
@@ -184,6 +197,7 @@ print(f"{tag}\t{url}\t{sha}")
 }
 
 latest_wrapper_sha() {
+  [[ -n "${WRAPPER_COMMIT_API:-}" ]] || return 1
   have python3 || return 1
   http_get "$WRAPPER_COMMIT_API" | python3 -c 'import json,sys; print(json.load(sys.stdin)["sha"])'
 }

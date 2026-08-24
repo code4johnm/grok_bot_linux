@@ -12,13 +12,19 @@ SKIP_SANDBOX=0
 FORCE_DOWNLOAD=0
 SYSTEM=0
 NO_AUTO_UPDATE=0
+WITH_CLI=0
+OPT_DIR_OVERRIDE=""
 
 usage() {
   cat <<EOF
 Usage: $0 [options]
 
   --prefix DIR       Install prefix (default: \$HOME/.local)
-  --system           Install to /usr/local (needs root)
+  --system           Install to /usr/local + /opt/grok-bot (needs root)
+  --opt-dir DIR      Application directory (default: \$HOME/.local/opt/grok-bot
+                     or /opt/grok-bot with --system)
+  --user             Force a non-root prefix install (default)
+  --with-cli         Also install the official Grok CLI (\$HOME/.grok/bin)
   --with-docker      Also install Docker Engine + Compose
   --skip-deps        Skip apt/dnf/pacman runtime packages
   --no-sandbox-ok    Do not try to setuid chrome-sandbox
@@ -28,7 +34,7 @@ Usage: $0 [options]
 
 After install:
   grok-bot
-  $ROOT/launch.sh
+  grok --version     (if --with-cli)
 EOF
 }
 
@@ -36,6 +42,9 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --prefix) PREFIX="${2:?}"; shift 2 ;;
     --system) SYSTEM=1; PREFIX=/usr/local; shift ;;
+    --user) SYSTEM=0; PREFIX="$HOME/.local"; shift ;;
+    --opt-dir) OPT_DIR_OVERRIDE="${2:?}"; shift 2 ;;
+    --with-cli) WITH_CLI=1; shift ;;
     --with-docker) WITH_DOCKER=1; shift ;;
     --skip-deps) SKIP_DEPS=1; shift ;;
     --no-sandbox-ok) SKIP_SANDBOX=1; shift ;;
@@ -47,16 +56,17 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ "$SYSTEM" -eq 1 ]]; then
-  OPT_DIR="${GROK_BOT_HOME:-/opt/Grok_Bot}"
+  OPT_DIR="${GROK_BOT_HOME:-/opt/grok-bot}"
   BIN_DIR="$PREFIX/bin"
-  DATA_HOME="${XDG_DATA_HOME:-/usr/local/share}"
-  PACKAGING_DIR="${GROK_BOT_LINUX_HOME:-/usr/local/opt/grok_bot_linux}"
+  DATA_HOME="${XDG_DATA_HOME:-/usr/share}"
+  PACKAGING_DIR="${GROK_BOT_LINUX_HOME:-/usr/local/lib/grok-bot-linux}"
 else
-  OPT_DIR="${GROK_BOT_HOME:-$PREFIX/opt/Grok_Bot}"
+  OPT_DIR="${GROK_BOT_HOME:-$PREFIX/opt/grok-bot}"
   BIN_DIR="$PREFIX/bin"
   DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
   PACKAGING_DIR="${GROK_BOT_LINUX_HOME:-$PREFIX/opt/grok_bot_linux}"
 fi
+[[ -n "$OPT_DIR_OVERRIDE" ]] && OPT_DIR="$OPT_DIR_OVERRIDE"
 
 info "Grok Bot Linux $VERSION"
 info "Install prefix: $PREFIX"
@@ -104,6 +114,7 @@ BIN_DIR="$BIN_DIR"
 DATA_HOME="$DATA_HOME"
 SYSTEM="$SYSTEM"
 PACKAGING_DIR="$PACKAGING_DIR"
+GROK_BOT_LINUX_REPO="${WRAPPER_REPO:-}"
 EOF
 if git -C "$ROOT" rev-parse HEAD >/dev/null 2>&1; then
   git -C "$ROOT" rev-parse HEAD > "$PACKAGING_DIR/.wrapper-revision"
@@ -133,10 +144,16 @@ if [[ -n "$icon_src" ]]; then
   if [[ "$(readlink -f "$icon_src")" != "$(readlink -f "$OPT_DIR/grok-bot.png" 2>/dev/null || true)" ]]; then
     install -m 0644 "$icon_src" "$OPT_DIR/grok-bot.png"
   fi
+  install -m 0644 "$icon_src" "$OPT_DIR/icon.png"
 fi
 
+if [[ "$SYSTEM" -eq 1 ]]; then
+  desktop_icon="$OPT_DIR/icon.png"
+else
+  desktop_icon="grok-bot"
+fi
 desktop_out="$DATA_HOME/applications/grok-bot.desktop"
-sed -e "s|@BIN@|$BIN_DIR/grok-bot|" -e "s|@ICON@|grok-bot|" \
+sed -e "s|@BIN@|$BIN_DIR/grok-bot|" -e "s|@ICON@|$desktop_icon|" \
   "$ROOT/share/grok-bot.desktop.in" > "$desktop_out"
 chmod 0644 "$desktop_out"
 
@@ -201,9 +218,14 @@ if [[ "$NO_AUTO_UPDATE" -eq 0 ]] && have systemctl; then
   fi
 fi
 
+if [[ "$WITH_CLI" -eq 1 ]]; then
+  "$ROOT/scripts/install-cli.sh"
+fi
+
 info "Installed."
 log "Run:     grok-bot"
 log "Update:  grok-bot update"
 log "Check:   grok-bot update --check"
+[[ "$WITH_CLI" -eq 1 ]] && log "CLI:     grok --version"
 log "Docker GUI (after --with-docker and a re-login):"
 log "  docker compose -f $ROOT/docker/docker-compose.yml up --build"

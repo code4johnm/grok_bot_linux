@@ -1,22 +1,31 @@
 VERSION := $(shell tr -d '[:space:]' < VERSION)
 
-.PHONY: help install uninstall deps docker-packages package docker-build docker-run check update check-update
+.PHONY: help install uninstall deps docker-packages package docker-build docker-run check update check-update ubuntu-install cli deb
 
 help:
 	@echo "Targets:"
-	@echo "  make install           Install app + runtime packages"
+	@echo "  make install           User-local app + runtime packages"
+	@echo "  make ubuntu-install    Ubuntu/Debian helper (user-local)"
+	@echo "  make cli               Official Grok CLI (\$HOME/.grok/bin)"
 	@echo "  make uninstall         Remove installed app files"
 	@echo "  make update            Update wrapper, Grok Bot, and runtime packages"
 	@echo "  make check-update      Show available updates"
 	@echo "  make deps              Install GTK/Electron/VA-API packages"
 	@echo "  make docker-packages   Install Docker Engine + Compose"
 	@echo "  make package           Build dist/grok_bot_linux-$(VERSION)-linux-x64.tar.gz"
+	@echo "  make deb               Build dist/grok-bot_$(VERSION)_amd64.deb"
 	@echo "  make docker-build      Build the GUI container image"
 	@echo "  make docker-run        Run Grok Bot in Docker (needs X11)"
 	@echo "  make check             Syntax-check scripts"
 
 install:
-	./install.sh
+	./install.sh --user
+
+ubuntu-install:
+	./scripts/install-ubuntu.sh --user --with-cli
+
+cli:
+	./scripts/install-cli.sh
 
 uninstall:
 	./uninstall.sh
@@ -35,6 +44,9 @@ docker-packages:
 
 package:
 	./scripts/build-package.sh
+
+deb:
+	./scripts/build-deb.sh
 
 docker-build:
 	docker compose -f docker/docker-compose.yml build

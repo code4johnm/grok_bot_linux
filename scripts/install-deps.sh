@@ -17,9 +17,12 @@ run() {
 }
 
 debian_first() {
-  local p
+  # Prefer an installable candidate. `apt-cache show` also matches packages
+  # that are only referred to (Candidate: (none)), which then fails install.
+  local p cand
   for p in "$@"; do
-    if apt-cache show "$p" >/dev/null 2>&1; then
+    cand="$(apt-cache policy "$p" 2>/dev/null | awk '/Candidate:/ {print $2; exit}')"
+    if [[ -n "$cand" && "$cand" != "(none)" ]]; then
       printf '%s\n' "$p"
       return 0
     fi

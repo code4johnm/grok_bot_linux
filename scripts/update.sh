@@ -88,12 +88,12 @@ load_install_conf() {
   fi
   PREFIX="${PREFIX:-$HOME/.local}"
   if [[ "${SYSTEM:-0}" -eq 1 ]]; then
-    OPT_DIR="${OPT_DIR:-${GROK_BOT_HOME:-/opt/Grok_Bot}}"
+    OPT_DIR="${OPT_DIR:-${GROK_BOT_HOME:-/opt/grok-bot}}"
     BIN_DIR="${BIN_DIR:-$PREFIX/bin}"
-    DATA_HOME="${DATA_HOME:-${XDG_DATA_HOME:-/usr/local/share}}"
-    PACKAGING_DIR="${PACKAGING_DIR:-${GROK_BOT_LINUX_HOME:-/usr/local/opt/grok_bot_linux}}"
+    DATA_HOME="${DATA_HOME:-${XDG_DATA_HOME:-/usr/share}}"
+    PACKAGING_DIR="${PACKAGING_DIR:-${GROK_BOT_LINUX_HOME:-/usr/local/lib/grok-bot-linux}}"
   else
-    OPT_DIR="${OPT_DIR:-${GROK_BOT_HOME:-$PREFIX/opt/Grok_Bot}}"
+    OPT_DIR="${OPT_DIR:-${GROK_BOT_HOME:-$PREFIX/opt/grok-bot}}"
     BIN_DIR="${BIN_DIR:-$PREFIX/bin}"
     DATA_HOME="${DATA_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}}"
     PACKAGING_DIR="${PACKAGING_DIR:-${GROK_BOT_LINUX_HOME:-$PREFIX/opt/grok_bot_linux}}"
