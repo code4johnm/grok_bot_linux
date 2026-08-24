@@ -1,0 +1,23 @@
+# Lint the files that actually exist. There is no application test suite.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  markdown:
+    name: Lint Markdown
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Run markdownlint-cli2
+        uses: DavidAnson/markdownlint-cli2-action@v16
+        with:
+          globs: "**/*.md"
