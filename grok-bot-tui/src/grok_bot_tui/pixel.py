@@ -12,12 +12,15 @@ SPRITE_H = 8
 
 
 def _truecolor() -> bool:
-    if os.environ.get("NO_COLOR", "").strip():
+    if os.environ.get("NO_COLOR", "").strip() or os.environ.get("GROK_TUI_NO_COLOR", "").strip():
         return False
     term = os.environ.get("COLORTERM", "").lower()
     if "truecolor" in term or "24bit" in term:
         return True
-    return os.environ.get("TERM", "").endswith("-direct")
+    if os.environ.get("TERM", "").endswith("-direct"):
+        return True
+    # VTE / QTerminal often omit COLORTERM; still do 24-bit when the TTY is not dumb.
+    return os.environ.get("TERM", "") not in ("", "dumb")
 
 
 def _use_256() -> bool:

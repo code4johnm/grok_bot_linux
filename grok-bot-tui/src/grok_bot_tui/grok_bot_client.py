@@ -7,6 +7,7 @@ import json
 import time
 import uuid
 from collections.abc import Callable, Iterator
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -45,6 +46,37 @@ def _error_text(body: Any, status: int) -> str:
     if status >= 500:
         return f"Grok Bot server error (HTTP {status})."
     return f"Grok Bot API error (HTTP {status})."
+
+
+def _machine_id() -> str:
+    for path in (Path("/etc/machine-id"), Path("/var/lib/dbus/machine-id")):
+        try:
+            text = path.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if text:
+            return text
+    return ""
+
+
+def _cursor_checksum(machine_id: str) -> str:
+    """Match grok-bot Ece(machineId): obfuscated timestamp prefix + machine id."""
+    stamp = int(time.time() * 1000) // 1_000_000
+    buf = bytearray(
+        [
+            (stamp >> 40) & 255,
+            (stamp >> 32) & 255,
+            (stamp >> 24) & 255,
+            (stamp >> 16) & 255,
+            (stamp >> 8) & 255,
+            stamp & 255,
+        ]
+    )
+    seed = 165
+    for i, byte in enumerate(buf):
+        buf[i] = ((byte ^ seed) + (i % 256)) & 255
+        seed = buf[i]
+    return base64.urlsafe_b64encode(bytes(buf)).decode("ascii").rstrip("=") + machine_id
 
 
 def _b64_json(payload: dict[str, Any]) -> str:
@@ -90,20 +122,25 @@ class GrokBotClient:
         self.model = "grok-bot"
         self.last_usage: dict[str, int] | None = None
         self.poll_sleep: Callable[[float], None] = time.sleep
-        self.poll_interval = 0.7
+        self.poll_interval = 0.5
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "Connect-Protocol-Version": "1",
+            "Connect-Timeout-Ms": "120000",
+            "x-cursor-client-type": "sand",
+            "x-cursor-client-version": client_version,
+            "x-sand-box-namespace": "prod",
+            "x-ghost-mode": "true",
+            "x-request-id": str(uuid.uuid4()),
+        }
+        machine = _machine_id()
+        if machine:
+            headers["x-cursor-checksum"] = _cursor_checksum(machine)
         self._http = httpx.Client(
             base_url=base_url.rstrip("/"),
             timeout=timeout,
-            headers={
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-                "Connect-Protocol-Version": "1",
-                "Connect-Timeout-Ms": "120000",
-                "x-cursor-client-type": "sand",
-                "x-cursor-client-version": client_version,
-                "x-sand-box-namespace": "prod",
-                "x-ghost-mode": "true",
-            },
+            headers=headers,
             transport=transport,
         )
 
@@ -165,7 +202,7 @@ class GrokBotClient:
         *,
         agent_id: str,
         sleep: Callable[[float], None] | None = None,
-        timeout: float = 45.0,
+        timeout: float = 90.0,
         interval: float | None = None,
     ) -> Iterator[str]:
         """Send the latest user line to the Grok Bot agent and yield reply text."""
@@ -186,31 +223,38 @@ class GrokBotClient:
         listed = self.list_transcript(agent_id)
         generation = int(listed.get("generation") or 1)
         seq = _next_seq(listed.get("entries"))
-        before = _assistant_text(listed.get("entries"))
+        before_seq, before = _newest_assistant(listed.get("entries"), agent_id)
         self.commit_user_message(agent_id, user_text, generation=generation, seq=seq)
         pause = sleep or self.poll_sleep
         gap = self.poll_interval if interval is None else interval
         deadline = time.monotonic() + timeout
         last = before
+        last_seq = before_seq
         while time.monotonic() < deadline:
             pause(gap)
             listed = self.list_transcript(agent_id)
-            current = _assistant_text(listed.get("entries"))
-            if current.startswith(last) and len(current) > len(last):
-                yield current[len(last) :]
+            current_seq, current = _newest_assistant(listed.get("entries"), agent_id)
+            streaming = _still_streaming(listed.get("entries"), agent_id)
+            if current_seq > last_seq or (current.startswith(last) and len(current) > len(last)):
+                chunk = current[len(last) :] if current.startswith(last) else current
+                if chunk:
+                    yield chunk
                 last = current
-                if not _still_streaming(listed.get("entries")):
+                last_seq = max(last_seq, current_seq)
+                if not streaming:
                     return
-            elif current != last and current and not current.startswith(last):
+            elif current != last and current:
                 yield current if not last else current[len(last) :] if current.startswith(last) else current
                 last = current
-                if not _still_streaming(listed.get("entries")):
+                last_seq = max(last_seq, current_seq)
+                if not streaming:
                     return
-            elif last != before and not _still_streaming(listed.get("entries")):
+            elif last_seq > before_seq and not streaming:
                 return
-        if last == before:
+        if last_seq <= before_seq and last == before:
             raise GrokBotAPIError(
-                "Grok Bot did not reply in time. Keep grok-bot signed in so the bot computer is running, then try again."
+                "No reply yet. The bot computer did not pick up this send. "
+                "Open that bot in grok-bot, then try again."
             )
 
 
@@ -240,10 +284,30 @@ def _entry_payload(item: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-def _assistant_text(entries: Any) -> str:
+def _to_agent_id(payload: dict[str, Any]) -> str:
+    to = payload.get("toAgent")
+    if isinstance(to, dict):
+        return str(to.get("id") or "")
+    return ""
+
+
+def _message_text(payload: dict[str, Any]) -> str:
+    text = payload.get("content")
+    if isinstance(text, str) and text:
+        return text
+    message = payload.get("message")
+    if isinstance(message, dict):
+        inner = message.get("content")
+        if isinstance(inner, str) and inner:
+            return inner
+    return ""
+
+
+def _assistant_rows(entries: Any, agent_id: str | None = None) -> list[tuple[int, str, bool]]:
+    """Assistant lines for this bot, oldest-first by seq (API lists newest-first)."""
+    rows: list[tuple[int, str, bool]] = []
     if not isinstance(entries, list):
-        return ""
-    chunks: list[str] = []
+        return rows
     for item in entries:
         if not isinstance(item, dict):
             continue
@@ -252,26 +316,85 @@ def _assistant_text(entries: Any) -> str:
             continue
         kind = str(payload.get("kind") or item.get("entryKind") or "")
         role = str(payload.get("role") or "")
-        if kind == "message" and role == "assistant":
-            text = payload.get("content")
-            if isinstance(text, str) and text:
-                chunks.append(text)
-        elif kind == "message" and not role:
-            text = payload.get("content")
-            if isinstance(text, str) and text and payload.get("toAgent"):
-                chunks.append(text)
-    return chunks[-1] if chunks else ""
+        to_id = _to_agent_id(payload)
+        is_asst = (kind == "message" and role == "assistant") or (
+            kind == "message" and not role and bool(payload.get("toAgent"))
+        )
+        if not is_asst:
+            continue
+        if agent_id and to_id and to_id != agent_id:
+            continue
+        text = _message_text(payload)
+        if not text:
+            continue
+        rows.append((_entry_seq(item), text, bool(payload.get("isStreaming"))))
+    rows.sort(key=lambda row: row[0])
+    return rows
 
 
-def _still_streaming(entries: Any) -> bool:
-    if not isinstance(entries, list):
+def _entry_seq(item: dict[str, Any]) -> int:
+    for key in ("seq", "updatedSeq", "updated_seq"):
+        raw = item.get(key)
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            continue
+    return 0
+
+
+def _newest_assistant(entries: Any, agent_id: str | None = None) -> tuple[int, str]:
+    rows = _assistant_rows(entries, agent_id)
+    if not rows:
+        return 0, ""
+    seq, text, _streaming = rows[-1]
+    return seq, text
+
+
+def _assistant_text(entries: Any, agent_id: str | None = None) -> str:
+    return _newest_assistant(entries, agent_id)[1]
+
+
+def _still_streaming(entries: Any, agent_id: str | None = None) -> bool:
+    rows = _assistant_rows(entries, agent_id)
+    if not rows:
         return False
-    for item in reversed(entries):
+    return rows[-1][2]
+
+
+def transcript_messages(entries: Any, agent_id: str | None = None) -> list[dict[str, str]]:
+    """Chronological user/assistant lines for one bot. Newest API order is reversed."""
+    if not isinstance(entries, list):
+        return []
+    rows: list[tuple[int, str, str]] = []
+    seen_user: set[str] = set()
+    for item in entries:
         if not isinstance(item, dict):
             continue
-        payload = _entry_payload(item) or item
-        if payload.get("isStreaming") is True:
-            return True
-        if str(payload.get("role") or "") == "assistant" or str(payload.get("kind") or "") == "message":
-            return bool(payload.get("isStreaming"))
-    return False
+        payload = _entry_payload(item)
+        if not payload:
+            continue
+        kind = str(payload.get("kind") or item.get("entryKind") or "")
+        role = str(payload.get("role") or "")
+        text = _message_text(payload)
+        if not text:
+            continue
+        seq = _entry_seq(item)
+        to_id = _to_agent_id(payload)
+        if kind == "message" and role == "assistant":
+            if agent_id and to_id and to_id != agent_id:
+                continue
+            rows.append((seq, "assistant", text))
+        elif kind == "message" and role == "user":
+            key = text.strip()
+            if key in seen_user:
+                continue
+            seen_user.add(key)
+            rows.append((seq, "user", text))
+        elif kind == "send-message":
+            key = text.strip()
+            if key in seen_user:
+                continue
+            seen_user.add(key)
+            rows.append((seq, "user", text))
+    rows.sort(key=lambda row: row[0])
+    return [{"role": role, "content": text} for _seq, role, text in rows[-40:]]

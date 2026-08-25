@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import shutil
 import sys
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,6 +18,7 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.layout import HSplit, Layout, Window
 from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
 from prompt_toolkit.layout.processors import BeforeInput
+from prompt_toolkit.output.color_depth import ColorDepth
 from prompt_toolkit.styles import Style
 
 from grok_bot_tui import TITLE, __version__
@@ -30,7 +32,7 @@ from grok_bot_tui.auth import (
 )
 from grok_bot_tui.client import GrokAPIError, GrokClient
 from grok_bot_tui.grok_bot_auth import load_access_token
-from grok_bot_tui.grok_bot_client import GrokBotAPIError, GrokBotClient
+from grok_bot_tui.grok_bot_client import GrokBotAPIError, GrokBotClient, transcript_messages
 from grok_bot_tui.config import Config, load_config
 from grok_bot_tui.grok_bot_session import (
     BOT_HOME_URL,
@@ -168,7 +170,7 @@ def render_agent_list(state: SessionState, *, terminal_width: int | None = None)
     name_w = 22
     for i, agent in enumerate(state.agents):
         mark = ">" if i == state.agent_index else " "
-        glyph = sprite_inline(agent.seed, terminal_width=width)
+        glyph = sprite_inline(agent.seed, terminal_width=width, truecolor=True)
         name = agent.name if len(agent.name) <= name_w else agent.name[: name_w - 1] + "…"
         blurb = agent.blurb if len(agent.blurb) <= 36 else agent.blurb[:33] + "…"
         lines.append(f"{mark} {glyph}  {name:<{name_w}} {blurb}")
@@ -276,6 +278,19 @@ def _enter_bot_chat(state: SessionState, agent: Agent) -> None:
     state.view = "chat"
     state.system = bot_system_prompt(agent, state.system)
     state.reset_messages()
+
+
+def _load_history(state: SessionState, client: GrokBotClient, agent: Agent) -> None:
+    """Fill the chat view from this bot's Grok Bot transcript (newest API rows reversed)."""
+    try:
+        listed = client.list_transcript(agent.id, limit=80)
+    except GrokBotAPIError:
+        return
+    rows = transcript_messages(listed.get("entries"), agent.id)
+    if not rows:
+        return
+    state.reset_messages()
+    state.messages.extend(rows)
 
 
 def _fill_session_bots(state: SessionState) -> None:
@@ -553,6 +568,8 @@ def run_shell(
             agent = state.active_agent
             if agent:
                 _enter_bot_chat(state, agent)
+                if isinstance(client, GrokBotClient):
+                    _load_history(state, client, agent)
                 emit(f"active bot: {agent.name} — chatting in this terminal")
             if not result.send_text:
                 return True
@@ -595,13 +612,16 @@ def run_shell(
                 except Exception:
                     pass
 
-            _send_chat(
-                state,
-                client,
-                result.send_text,
-                emit=emit,
-                refresh=refresh,
-            )
+            def work() -> None:
+                _send_chat(
+                    state,
+                    client,
+                    result.send_text,
+                    emit=emit,
+                    refresh=refresh,
+                )
+
+            threading.Thread(target=work, daemon=True).start()
         return True
 
     compose = Buffer()
@@ -680,12 +700,16 @@ def run_shell(
             "prompt": "bold ansicyan",
         }
     )
+    if sys.stdin.isatty() and os.environ.get("GROK_TUI_NO_COLOR", "").strip() != "1":
+        os.environ.pop("NO_COLOR", None)
+        os.environ.setdefault("COLORTERM", "truecolor")
     app: Application[int] = Application(
         layout=layout,
         key_bindings=kb,
         full_screen=True,
         mouse_support=False,
         style=style,
+        color_depth=ColorDepth.TRUE_COLOR,
     )
     holder["app"] = app
     try:
@@ -742,11 +766,8 @@ def _send_chat(
             state.messages.pop()
         log("")
     except GrokBotAPIError as exc:
-        if draft in state.messages:
-            state.messages.remove(draft)
-        if state.messages and state.messages[-1].get("role") == "user":
-            state.messages.pop()
-        log(f"error: {exc}")
+        draft["content"] = str(exc)
+        log(str(exc))
     finally:
         state.streaming = False
         if refresh:
