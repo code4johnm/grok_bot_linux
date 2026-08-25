@@ -15,3 +15,18 @@ jobs:
           bash -n scripts/*.sh docker/entrypoint.sh
       - name: Compose file parses
         run: docker compose -f docker/docker-compose.yml config >/dev/null
+
+  grok-bot-tui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install grok-bot-tui (offline tests)
+        run: pip install -e "./grok-bot-tui[dev]"
+      - name: pytest grok-bot-tui
+        run: pytest grok-bot-tui/tests
+        env:
+          XAI_API_KEY: ""
+          GROK_API_KEY: ""
