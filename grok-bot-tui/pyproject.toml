@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "grok-tui"
-version = "0.1.0"
-description = "Minimal terminal UI Grok bot using the xAI Responses API"
+name = "grok-bot-tui"
+version = "0.1.1"
+description = "Grok GUI TUI shell — companion TUI around the official Grok GUI"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -18,7 +18,7 @@ dependencies = [
 dev = ["pytest>=8.0"]
 
 [project.scripts]
-grok-tui = "grok_tui.__main__:main"
+grok-bot-tui = "grok_bot_tui.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -6,31 +6,29 @@ import argparse
 import os
 from dataclasses import dataclass
 
+from grok_bot_tui import PROG, TITLE
+from grok_bot_tui.gui import OFFICIAL_GUI_URL
+
 # Current chat model in https://docs.x.ai/developers/quickstart (2026).
 DEFAULT_MODEL = "grok-4.6"
 DEFAULT_BASE_URL = "https://api.x.ai/v1"
-DEFAULT_SYSTEM = "You are a short, helpful assistant in a terminal."
+DEFAULT_SYSTEM = "You are a short, helpful companion in a terminal. The official Grok GUI is the product."
 # Reasoning models: docs.x.ai generate-text / streaming recommend a long timeout.
 DEFAULT_TIMEOUT = 3600.0
 
 
-class MissingAPIKeyError(Exception):
-    """Raised when no API key is configured."""
-
-    def __init__(self) -> None:
-        super().__init__(
-            "Missing API key. Set XAI_API_KEY or GROK_API_KEY "
-            "(or pass --api-key). Never commit the value."
-        )
-
-
 @dataclass(frozen=True)
 class Config:
-    api_key: str
+    api_key: str | None
     model: str
     system: str
     timeout: float
     base_url: str
+    gui_url: str
+
+    @property
+    def has_api_key(self) -> bool:
+        return bool(self.api_key)
 
 
 def _first_env(*names: str) -> str | None:
@@ -55,24 +53,29 @@ def _parse_timeout(raw: str | None, fallback: float) -> float:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="grok-tui",
-        description="Minimal TUI chat with Grok via the xAI Responses API.",
+        prog=PROG,
+        description=(
+            f"{TITLE} — companion TUI around the official Grok GUI "
+            f"({OFFICIAL_GUI_URL}). Not a replacement for Grok. "
+            "Use /gui to open the official GUI. Optional API companion "
+            "needs XAI_API_KEY or GROK_API_KEY."
+        ),
     )
     parser.add_argument(
         "--api-key",
         dest="api_key",
         default=None,
-        help="API key (prefer XAI_API_KEY or GROK_API_KEY).",
+        help="Optional xAI API key (prefer XAI_API_KEY or GROK_API_KEY). Not required.",
     )
     parser.add_argument(
         "--model",
         default=None,
-        help=f"Model ID (default: {DEFAULT_MODEL} or GROK_MODEL).",
+        help=f"API companion model ID (default: {DEFAULT_MODEL} or GROK_MODEL).",
     )
     parser.add_argument(
         "--system",
         default=None,
-        help="System prompt (default: GROK_SYSTEM or a short terminal assistant).",
+        help="API companion system prompt (default: GROK_SYSTEM).",
     )
     parser.add_argument(
         "--timeout",
@@ -85,14 +88,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help=f"API base URL (default: {DEFAULT_BASE_URL}).",
     )
+    parser.add_argument(
+        "--gui-url",
+        default=None,
+        help=f"Official Grok GUI URL (default: {OFFICIAL_GUI_URL} or GROK_GUI_URL).",
+    )
     return parser
 
 
 def load_config(argv: list[str] | None = None) -> Config:
     args = build_parser().parse_args(argv)
     api_key = (args.api_key or "").strip() or _first_env("XAI_API_KEY", "GROK_API_KEY")
-    if not api_key:
-        raise MissingAPIKeyError()
 
     timeout = args.timeout
     if timeout is None:
@@ -106,4 +112,5 @@ def load_config(argv: list[str] | None = None) -> Config:
         system=(args.system if args.system is not None else (_first_env("GROK_SYSTEM") or DEFAULT_SYSTEM)),
         timeout=timeout,
         base_url=(args.base_url or _first_env("GROK_BASE_URL") or DEFAULT_BASE_URL).rstrip("/"),
+        gui_url=(args.gui_url or _first_env("GROK_GUI_URL") or OFFICIAL_GUI_URL),
     )

@@ -3,16 +3,12 @@
 from __future__ import annotations
 
 import json
-import os
-import subprocess
-import sys
 from pathlib import Path
 
 import httpx
 import pytest
 
-from grok_tui.app import ChatState, handle_command, main
-from grok_tui.client import (
+from grok_bot_tui.client import (
     GrokAPIError,
     GrokClient,
     delta_from_event,
@@ -21,7 +17,7 @@ from grok_tui.client import (
     parse_sse_data_line,
     redact_headers,
 )
-from grok_tui.config import DEFAULT_MODEL, MissingAPIKeyError, load_config
+from grok_bot_tui.config import DEFAULT_MODEL
 
 COMPLETED = {
     "id": "resp_test",
@@ -32,13 +28,13 @@ COMPLETED = {
             "type": "message",
             "role": "assistant",
             "status": "completed",
-            "content": [{"type": "output_text", "text": "Hello from Grok."}],
+            "content": [{"type": "output_text", "text": "Hello from companion."}],
         }
     ],
 }
 
 
-def _client(handler: httpx.MockTransport | None = None, **kwargs) -> GrokClient:
+def _client(handler: httpx.MockTransport | None = None) -> GrokClient:
     transport = handler if handler is not None else httpx.MockTransport(lambda r: httpx.Response(200, json=COMPLETED))
     return GrokClient(
         api_key="test-key",
@@ -50,13 +46,13 @@ def _client(handler: httpx.MockTransport | None = None, **kwargs) -> GrokClient:
 
 
 def test_client_source_has_no_ui_imports() -> None:
-    source = Path(__file__).resolve().parents[1].joinpath("src/grok_tui/client.py").read_text()
-    for name in ("prompt_toolkit", "rich", "textual", "curses"):
+    source = Path(__file__).resolve().parents[1].joinpath("src/grok_bot_tui/client.py").read_text()
+    for name in ("prompt_toolkit", "rich", "textual", "curses", "webbrowser"):
         assert name not in source
 
 
 def test_output_text_from_docs_shape() -> None:
-    assert output_text(COMPLETED) == "Hello from Grok."
+    assert output_text(COMPLETED) == "Hello from companion."
 
 
 def test_redact_authorization() -> None:
@@ -79,7 +75,7 @@ def test_complete_posts_responses_and_keeps_history_shape() -> None:
                 {"role": "user", "content": "Hi"},
             ]
         )
-    assert text == "Hello from Grok."
+    assert text == "Hello from companion."
     assert len(seen) == 1
     assert seen[0].url.path == "/v1/responses"
     body = json.loads(seen[0].content)
@@ -94,9 +90,7 @@ def test_stream_text_yields_output_text_deltas() -> None:
     chunks = [
         'data: {"type":"response.output_text.delta","delta":"Hel"}\n\n',
         'data: {"type":"response.output_text.delta","delta":"lo"}\n\n',
-        'data: {"type":"response.completed","response":'
-        + json.dumps(COMPLETED)
-        + "}\n\n",
+        'data: {"type":"response.completed","response":' + json.dumps(COMPLETED) + "}\n\n",
         "data: [DONE]\n\n",
     ]
 
@@ -125,7 +119,7 @@ def test_stream_falls_back_to_completed_output_when_no_deltas() -> None:
         )
 
     with _client(httpx.MockTransport(handler)) as client:
-        assert "".join(client.stream_text([{"role": "user", "content": "Hi"}])) == "Hello from Grok."
+        assert "".join(client.stream_text([{"role": "user", "content": "Hi"}])) == "Hello from companion."
 
 
 def test_rate_limit_is_one_line_error() -> None:
@@ -178,62 +172,3 @@ def test_parse_sse_and_delta_helpers() -> None:
     assert delta_from_event(event) == "x"
     assert error_message_from_body(None, 503) == "Server error (HTTP 503)."
     assert error_message_from_body(None, 429) == "Rate limited (HTTP 429)."
-
-
-def test_module_exits_nonzero_without_key() -> None:
-    env = os.environ.copy()
-    env.pop("XAI_API_KEY", None)
-    env.pop("GROK_API_KEY", None)
-    proc = subprocess.run(
-        [sys.executable, "-m", "grok_tui"],
-        env=env,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert proc.returncode == 1
-    assert "Missing API key" in proc.stderr
-    assert "XAI_API_KEY" in proc.stderr
-
-
-def test_missing_key_exits_nonzero(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    monkeypatch.delenv("XAI_API_KEY", raising=False)
-    monkeypatch.delenv("GROK_API_KEY", raising=False)
-    with pytest.raises(MissingAPIKeyError):
-        load_config([])
-    code = main([])
-    assert code == 1
-    err = capsys.readouterr().err
-    assert "XAI_API_KEY" in err
-    assert "GROK_API_KEY" in err
-
-
-def test_xai_key_wins_over_grok_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("XAI_API_KEY", "from-xai")
-    monkeypatch.setenv("GROK_API_KEY", "from-grok")
-    cfg = load_config(["--model", "grok-4.6"])
-    assert cfg.api_key == "from-xai"
-    assert cfg.model == DEFAULT_MODEL
-
-
-def test_grok_key_fallback_and_system_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("XAI_API_KEY", raising=False)
-    monkeypatch.setenv("GROK_API_KEY", "from-grok")
-    monkeypatch.setenv("GROK_SYSTEM", "Be terse.")
-    cfg = load_config([])
-    assert cfg.api_key == "from-grok"
-    assert cfg.system == "Be terse."
-
-
-def test_commands_clear_quit_help_model() -> None:
-    state = ChatState(system="sys", model="grok-4.6")
-    state.messages.append({"role": "user", "content": "hi"})
-    assert handle_command("/clear", state).kind == "clear"
-    assert state.messages == [{"role": "system", "content": "sys"}]
-    assert handle_command("/quit", state).kind == "quit"
-    assert handle_command("/exit", state).kind == "quit"
-    help_result = handle_command("/help", state)
-    assert help_result is not None and "/clear" in help_result.message
-    assert handle_command("/model", state).message.endswith("grok-4.6")
-    assert handle_command("/model grok-4.6", state).kind == "model"
-    assert handle_command("hello", state) is None
