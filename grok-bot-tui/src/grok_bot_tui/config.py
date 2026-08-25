@@ -1,4 +1,4 @@
-"""CLI flags and environment configuration. Never logs secrets."""
+"""CLI flags for optional /chat (xAI Responses). Never logs secrets."""
 
 from __future__ import annotations
 
@@ -7,12 +7,10 @@ import os
 from dataclasses import dataclass
 
 from grok_bot_tui import PROG, TITLE
-from grok_bot_tui.gui import GROK_BOT_URL
 
-# Current chat model in https://docs.x.ai/developers/quickstart (2026) — /chat only.
 DEFAULT_MODEL = "grok-4.6"
 DEFAULT_BASE_URL = "https://api.x.ai/v1"
-DEFAULT_SYSTEM = "You are a short, helpful Grok API companion. This is not Grok Bot."
+DEFAULT_SYSTEM = "You are a short, helpful chat in grok-bot-tui. This is not Grok."
 DEFAULT_TIMEOUT = 3600.0
 
 
@@ -53,42 +51,39 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=PROG,
         description=(
-            f"{TITLE} — launcher around Grok Bot, not a replacement for Electron grok-bot. "
-            f"/gui starts grok-bot or launch.sh, else {GROK_BOT_URL}. Never grok.com. "
-            "Default action is the official grok CLI (Grok Build TUI). "
-            "/chat is optional Grok API (not Grok Bot)."
+            f"{TITLE} — one bot thread + compose for the grok-bot app. "
+            "/gui launches packaged grok-bot on x86_64. "
+            "Typing or /chat uses xAI Responses when a key is set. "
+            "This is not Grok."
         ),
-        epilog=(
-            "Commands: /gui /grok /plan /help /clear /notes /chat "
-            "/prompt /analyze /model /sessions /quit"
-        ),
+        epilog="Commands: <text> /chat /gui /bot /model /clear /help /quit",
     )
     parser.add_argument(
         "--api-key",
         dest="api_key",
         default=None,
-        help="Optional xAI API key for /chat only (XAI_API_KEY or GROK_API_KEY).",
+        help="xAI API key for /chat (XAI_API_KEY or GROK_API_KEY).",
     )
     parser.add_argument(
         "--model",
         default=None,
-        help=f"Grok API (/chat) model ID (default: {DEFAULT_MODEL} or GROK_MODEL).",
+        help=f"/chat model ID (default: {DEFAULT_MODEL} or GROK_MODEL).",
     )
     parser.add_argument(
         "--system",
         default=None,
-        help="Grok API (/chat) system prompt (default: GROK_SYSTEM).",
+        help="/chat system prompt (default: GROK_SYSTEM).",
     )
     parser.add_argument(
         "--timeout",
         type=float,
         default=None,
-        help=f"HTTP timeout for /chat only (default: {DEFAULT_TIMEOUT:g} or GROK_TIMEOUT).",
+        help=f"HTTP timeout for /chat (default: {DEFAULT_TIMEOUT:g} or GROK_TIMEOUT).",
     )
     parser.add_argument(
         "--base-url",
         default=None,
-        help=f"Grok API base URL for /chat only (default: {DEFAULT_BASE_URL}).",
+        help=f"xAI Responses base URL (default: {DEFAULT_BASE_URL}).",
     )
     return parser
 

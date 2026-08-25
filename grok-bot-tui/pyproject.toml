@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "grok-bot-tui"
-version = "0.1.5"
-description = "Grok Bot companion — launches packaged Electron grok-bot and official grok CLI (not a replacement)"
+version = "0.1.6"
+description = "grok-bot-tui — one-thread terminal UI for the grok-bot app (not Grok)"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

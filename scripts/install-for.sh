@@ -12,6 +12,16 @@ source "$ROOT/scripts/common.sh"
 TARGET="${1:-}"
 shift || true
 
+# TUI-only: no Electron. Works on aarch64. Do not dispatch to desktop installers.
+if [[ "$TARGET" == "--tui-only" ]]; then
+  exec "$ROOT/scripts/install-tui.sh"
+fi
+for _arg in "$@"; do
+  if [[ "$_arg" == "--tui-only" ]]; then
+    exec "$ROOT/scripts/install-tui.sh"
+  fi
+done
+
 detect_target() {
   local id like
   id="$(os_id)"
@@ -73,6 +83,9 @@ Usage: $0 ubuntu|rocky|kali|auto [install flags]
 System prefix on every dist: /opt/grok-bot
 
 Flags are passed through (--system, --user, --with-cli, ...).
+
+  --tui-only   Install grok-bot-tui only (no Electron). Safe on aarch64.
+               Same as scripts/install-tui.sh
 EOF
     exit 0
     ;;
