@@ -39,7 +39,7 @@ def _error_text(body: Any, status: int) -> str:
         if isinstance(msg, str) and msg:
             return msg
     if status == 401:
-        return "Grok Bot session expired. Sign in with grok-bot (Gmail), then retry."
+        return "Grok Bot session expired. Sign in with grok-bot, then retry."
     if status == 429:
         return "Rate limited (HTTP 429)."
     if status >= 500:

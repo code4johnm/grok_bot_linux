@@ -99,6 +99,16 @@ def find_desktop(candidates: Sequence[Path] | None = None) -> Path | None:
     return usable[0] if usable else None
 
 
+def find_electron(candidates: Sequence[Path] | None = None) -> Path | None:
+    """Electron grok-bot binary (not launch.sh). Used to decrypt safeStorage."""
+    items = list(candidates) if candidates is not None else _desktop_candidates()
+    usable = [path for path in items if path.is_file() and os.access(path, os.X_OK)]
+    for path in usable:
+        if _is_electron_binary(path):
+            return path
+    return None
+
+
 def launch_grok_bot(
     *,
     popen: Callable[..., object] | None = None,

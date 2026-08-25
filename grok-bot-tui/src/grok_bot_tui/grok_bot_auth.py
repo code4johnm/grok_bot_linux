@@ -10,17 +10,22 @@ import base64
 import hashlib
 import json
 import os
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
 from grok_bot_tui.grok_bot_session import config_dir
+from grok_bot_tui.gui import find_electron
 
 PLAINTEXT_PREFIX = "plaintext:v1:"
 SCOPED_PREFIX = "scoped:v1:"
 ACCESS_KEY = "cursor-access-token"
 REFRESH_KEY = "cursor-refresh-token"
 ACCOUNTS_KEY = "cursor-accounts"
+
+_TOKEN_CACHE: str | None = None
 
 
 def secrets_path(*, cfg: Path | None = None) -> Path:
@@ -157,6 +162,115 @@ def _decode_stored(value: str) -> str | None:
     return None
 
 
+def _helper_src() -> Path:
+    packaged = Path(__file__).resolve().parent / "decrypt_session"
+    if (packaged / "main.js").is_file():
+        return packaged
+    return Path(__file__).resolve().parents[2] / "share" / "decrypt-session"
+
+
+def _prepare_helper_tree(electron: Path, dest: Path) -> Path:
+    dest.mkdir(parents=True, exist_ok=True)
+    bin_path = dest / "grok-bot"
+    if not bin_path.exists():
+        try:
+            os.link(electron, bin_path)
+        except OSError:
+            shutil.copy2(electron, bin_path)
+    src_root = electron.parent
+    for item in src_root.iterdir():
+        if item.name in {"grok-bot", "resources"}:
+            continue
+        link = dest / item.name
+        if not link.exists():
+            try:
+                link.symlink_to(item)
+            except OSError:
+                continue
+    res = dest / "resources"
+    res.mkdir(exist_ok=True)
+    src_res = src_root / "resources"
+    if src_res.is_dir():
+        for item in src_res.iterdir():
+            if item.name in {"app.asar", "app"}:
+                continue
+            link = res / item.name
+            if not link.exists():
+                try:
+                    link.symlink_to(item)
+                except OSError:
+                    continue
+    app_dir = res / "app"
+    app_dir.mkdir(exist_ok=True)
+    helper = _helper_src()
+    shutil.copy2(helper / "main.js", app_dir / "main.js")
+    shutil.copy2(helper / "package.json", app_dir / "package.json")
+    return bin_path
+
+
+def _decrypt_via_electron(*, cfg: Path | None = None) -> str | None:
+    """Use grok-bot's Electron safeStorage (same app name / keyring)."""
+    secrets = secrets_path(cfg=cfg)
+    if not secrets.is_file():
+        return None
+    electron = find_electron()
+    if electron is None:
+        return None
+    helper = _helper_src()
+    if not (helper / "main.js").is_file():
+        return None
+    cache_root = Path(os.environ.get("XDG_CACHE_HOME", "") or (Path.home() / ".cache")) / "grok-tui-shell"
+    tree = cache_root / "safe-storage-helper"
+    try:
+        binary = _prepare_helper_tree(electron, tree)
+    except OSError:
+        return None
+    runtime = Path(os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir())
+    fd, token_path = tempfile.mkstemp(prefix="grok-tui-token-", dir=str(runtime))
+    os.close(fd)
+    os.chmod(token_path, 0o600)
+    log_path = token_path + ".log"
+    env = os.environ.copy()
+    env["GB_DECRYPT_TOKEN_OUT"] = token_path
+    env["GB_DECRYPT_LOG"] = log_path
+    env["GB_SECRETS_PATH"] = str(secrets)
+    env["GB_USER_DATA"] = str(cfg or config_dir())
+    try:
+        proc = subprocess.run(
+            [str(binary), "--no-sandbox"],
+            env=env,
+            timeout=15,
+            check=False,
+            capture_output=True,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        for path in (token_path, log_path):
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        return None
+    token = None
+    try:
+        if proc.returncode == 0 and Path(token_path).is_file():
+            text = Path(token_path).read_text(encoding="utf-8")
+            if _looks_like_token(text):
+                token = text
+    except OSError:
+        token = None
+    for path in (token_path, log_path):
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+    return token
+
+
+def reset_token_cache() -> None:
+    global _TOKEN_CACHE
+    _TOKEN_CACHE = None
+
+
 def _accounts_record(raw: dict[str, Any]) -> dict[str, Any] | None:
     blob = raw.get(ACCOUNTS_KEY)
     if isinstance(blob, dict):
@@ -172,9 +286,12 @@ def _accounts_record(raw: dict[str, Any]) -> dict[str, Any] | None:
 
 def load_access_token(*, cfg: Path | None = None) -> str | None:
     """Return the signed-in Grok Bot access token, or None. Never log it."""
+    global _TOKEN_CACHE
     env = os.environ.get("GROK_BOT_ACCESS_TOKEN", "").strip()
     if env:
         return env
+    if _TOKEN_CACHE:
+        return _TOKEN_CACHE
     path = secrets_path(cfg=cfg)
     if not path.is_file():
         return None
@@ -199,9 +316,17 @@ def load_access_token(*, cfg: Path | None = None) -> str | None:
     stored = str(slot.get(ACCESS_KEY) or "").strip()
     decoded = _decode_stored(stored)
     if decoded:
+        _TOKEN_CACHE = decoded
         return decoded
-    # Encrypted desktop blob (v10/v11). Caller should keep using the GUI session
-    # until a plaintext token is available; do not scrape Cookies.
+    if os.environ.get("GROK_TUI_NO_ELECTRON", "").strip() == "1":
+        return None
+    raw = _b64decode(stored) or b""
+    if not (raw.startswith(b"v10") or raw.startswith(b"v11")) or len(raw) < 64:
+        return None
+    decrypted = _decrypt_via_electron(cfg=cfg)
+    if decrypted:
+        _TOKEN_CACHE = decrypted
+        return decrypted
     return None
 
 

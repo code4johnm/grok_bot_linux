@@ -8,11 +8,11 @@ not the official `grok` CLI (`curl -fsSL https://x.ai/cli/install.sh | bash`).
 
 | Name | Role |
 | --- | --- |
-| **Grok Bot** (`grok-bot`) | Electron GUI. Teammate / virtual-computer product from https://x.ai/bot. Signs in with Cursor SSO (Gmail and other IdPs). |
+| **Grok Bot** (`grok-bot`) | Electron GUI. Teammate / virtual-computer product from https://x.ai/bot. Signs in the same way the desktop does. |
 | **`grok-tui-shell`** | Fullscreen TUI around that GUI: same sign-in, same bot roster, keyboard navigation. Commands `grok-tui-shell` and `grok-bot-tui` are aliases. |
 | **`grok` CLI** | Separate official product. Device/OIDC at `accounts.x.ai`. This shell does **not** call `grok login`. |
 
-Package: `grok-bot-tui` 0.6.0. Python 3.9+ (Pi 3 Bookworm / Ubuntu 20.04+).
+Package: `grok-bot-tui` 0.7.0. Python 3.9+ (Pi 3 Bookworm / Ubuntu 20.04+).
 License: MIT (this packaging tree). Targets: Ubuntu, Kali Linux, Rocky Linux,
 and Raspberry Pi OS / Ubuntu on Raspberry Pi (x86_64, aarch64, armv7l).
 
@@ -45,27 +45,26 @@ and Raspberry Pi OS / Ubuntu on Raspberry Pi (x86_64, aarch64, armv7l).
 - Fullscreen prompt_toolkit UI: header, body, `compose>` line, status footer.
 - **Sign-in the same way as Grok Bot:** `/login` prints a clickable OSC 8 link
   to `https://cursor.com/bot/onboarding` and **launches `grok-bot`**. Finish
-  Gmail / Cursor SSO in that window. The TUI does not ask for a Gmail password.
+  sign-in in that window. The TUI uses whatever session the GUI stores.
 - Detects an existing GUI session so you do not sign in twice.
 - After sign-in, lists **your** bots from the signed-in Grok Bot roster cache
   (names, unread counts, pin order, last selected). Heading:
   `Bots  (N from signed-in Grok Bot)`.
-- One-row pixel sprites (`█░`) hashed from each bot id. Narrow terminals
-  collapse to `[A]`.
+- One-row color pixel sprites (`▀` with truecolor / 256-color fg+bg) hashed
+  from each bot id. Narrow terminals collapse to a colored `[A]`.
 - `j` / `k` or arrow keys move; Enter opens **in-terminal** chat with that bot.
   Replies stream in the TUI. No GUI is launched for chat.
 
 ## What it does not do
 
 - It is not Grok Bot. Work still runs in the desktop app.
-- It does **not** implement a private Gmail OAuth client. Cursor SSO stays in
-  grok-bot.
+- It does **not** implement a private OAuth client. Sign-in stays in grok-bot.
 - It does **not** read Cookies. Chat uses Grok Bot `cursor-accounts` from
   `sand-secrets.json` (not an xAI API key). Tokens are never logged.
 - It does **not** list public x.ai/bot marketing templates (Sales Outbound,
   Talent Scout, …) as if they were your session. If you still see those, you
   are on a stale install (0.3.0 or older). Reinstall and restart; header must
-  show **0.6.0**.
+  show **0.7.0**.
 - It does **not** call the official `grok` CLI or `grok login --device-auth`.
 - It cannot list bots that grok-bot has never synced to disk. Open grok-bot
   once, then `/agents`.
@@ -76,7 +75,7 @@ and Raspberry Pi OS / Ubuntu on Raspberry Pi (x86_64, aarch64, armv7l).
 | --- | --- |
 | Python | 3.9 or newer (3.11+ preferred) |
 | Terminal | UTF-8 locale. OSC 8 hyperlinks work in VTE, Kitty, iTerm2, Windows Terminal, and similar. The raw URL is always printed too. SSH and headless Pi: use CLI commands or tmux. |
-| Grok Bot desktop | Needed for Gmail/Cursor SSO and the roster. **x86_64 only.** Install with `./install.sh` or `scripts/install-ubuntu.sh` / `install-rocky.sh` / `install-kali.sh`. Prefix: `/opt/grok-bot` (system) or `$HOME/.local/opt/grok-bot` (user). |
+| Grok Bot desktop | Needed for GUI sign-in and the roster. **x86_64 only.** Install with `./install.sh` or `scripts/install-ubuntu.sh` / `install-rocky.sh` / `install-kali.sh`. Prefix: `/opt/grok-bot` (system) or `$HOME/.local/opt/grok-bot` (user). |
 | Raspberry Pi / ARM | TUI + CLI run on Pi 3/4/5 (`armv7l`, `aarch64`). No Electron grok-bot tarball; `/gui` and `/login` launch will say so. Use `grok-tui-shell status`. |
 
 Python deps (from `pyproject.toml`): `httpx`, `prompt_toolkit`. Optional:
@@ -113,7 +112,7 @@ python3 -m pip install --user -e "./grok-bot-tui[dev]"
 
 ```bash
 python3 -m pip show grok-bot-tui
-# Version: 0.6.0
+# Version: 0.7.0
 ```
 
 Install grok-bot itself on **x86_64** so `/login` can launch the GUI:
@@ -142,7 +141,7 @@ grok-tui-shell status
 Notes:
 
 - **No Electron grok-bot** on ARM. `/login` still prints
-  `https://cursor.com/bot/onboarding`; complete Gmail on an x86_64 grok-bot
+  `https://cursor.com/bot/onboarding`; complete GUI sign-in on an x86_64 grok-bot
   box if you need the GUI roster. On the Pi, `whoami` / `bots` read local
   `$HOME/.config/Grok Bot/` if you copied a profile (not recommended) or
   stay signed out until you sign in with grok-bot on an x86_64 machine.
@@ -184,7 +183,7 @@ grok-tui-shell
 
 Quit: `/quit`, `/exit`, `/q`, `Ctrl-C`, `Ctrl-D`, or `Ctrl-Q`.
 
-If grok-bot is already signed in with Gmail, the TUI opens on the **Bots**
+If grok-bot is already signed in, the TUI opens on the **Bots**
 list. If not, you get the signed-out pane.
 
 No TTY (cron, raw systemd without tmux): the process exits 2 and tells you
@@ -218,11 +217,11 @@ grok-tui-shell --json status
 Fullscreen, five rows of chrome:
 
 ```text
-Grok GUI TUI shell  0.6.0                          ← header (reverse)
+Grok GUI TUI shell  0.7.0                          ← header (reverse)
 Bots  (N from signed-in Grok Bot)                  ← body
-> ████  Night Watch             2 unread · …
-  ██░░  Ops                     queue
-↑↓ / j k  select   Enter  use bot   /gui  desktop
+> ▀▀▀▀  Night Watch             2 unread · …
+  ▀▀▀▀  Ops                     queue
+↑↓ / j k  select   Enter  chat in this terminal
 ──────────────────────────────────────────────────
 compose>                                           ← command / message
 bot:Night Watch | signed in | shell                ← footer
@@ -240,7 +239,7 @@ bot:Night Watch | signed in | shell                ← footer
 Grok Bot signs in at **Cursor onboarding**, not at an xAI device URL:
 
 - Product: https://x.ai/bot
-- SSO: https://cursor.com/bot/onboarding (Gmail and other IdPs the GUI allows)
+- SSO: https://cursor.com/bot/onboarding (whatever IdP grok-bot offers)
 
 ### Unsigned pane
 
@@ -258,8 +257,8 @@ Override the printed URL with `GROK_TUI_SIGNIN_URL` (tests / staging only).
 4. Poll up to **20 seconds** for GUI user-data markers.
 5. Footer becomes `signed in` and the body switches to **Bots**.
 
-Complete Gmail in the **Grok Bot window**. Retry `/login` if the poll times
-out before you finish MFA.
+Complete sign-in in the **Grok Bot window**. Retry `/login` if the poll times
+out before you finish.
 
 ### How “signed in” is detected
 
@@ -337,7 +336,7 @@ Typed lines:
 | `/help` | In-TUI help (same commands). |
 | `/quit` `/exit` `/q` | Exit. |
 | other `/…` | `Unknown command`. |
-| non-slash text on the list | Treated as **select**, not chat. |
+| non-slash text on the list | Message to the highlighted bot (opens chat). |
 | non-slash text in chat view | Send (see next section). |
 | empty line while signed out | Same as `/login`. |
 
@@ -345,19 +344,17 @@ Typed lines:
 
 ## Talking to a bot
 
-Chat stays in this terminal and uses **Grok Bot credentials** (the Cursor
-session grok-bot stored after Gmail SSO), not an xAI API key. Selecting a
-bot (Enter) opens chat here. Messages go to Grok Bot
-(`aiserver.v1.GrokBotService`) as that teammate. Replies appear in the
-transcript (`you:` / `bot:`). History stays until `/clear`.
+Chat stays in this terminal and uses **Grok Bot credentials** (the same
+session grok-bot stores), not an xAI API key. Selecting a bot (Enter)
+opens chat here. Messages go to Grok Bot (`aiserver.v1.GrokBotService`) as
+that teammate. Replies appear in the transcript (`you:` / `bot:`). History
+stays until `/clear`.
 
 Chat **never** launches a GUI and **never** uses `XAI_API_KEY` / `/login-key`.
 
-Sign in once with `/login` (same Gmail/Cursor SSO as grok-bot). The TUI
-reads `cursor-accounts` from `$HOME/.config/Grok Bot/sand-secrets.json`.
-It does not read Cookies. If the desktop encrypted the token (Electron
-safeStorage) and a plaintext session is not available, sign in with
-grok-bot again so the session is live, then retry.
+The TUI reads `cursor-accounts` from `$HOME/.config/Grok Bot/sand-secrets.json`
+using grok-bot’s Electron `safeStorage` (same app name and userData as the
+GUI). It does not read Cookies.
 
 Headless one-shot:
 
@@ -447,7 +444,10 @@ These flags affect optional api.x.ai `/chat` only.
 | `GROK_BOT_DATA` | GUI settings dir. Default `$HOME/.grokbot`. |
 | `GROK_BOT_HOME` | Directory containing the `grok-bot` binary. |
 | `GROK_BOT_TUI_ARCH` | Override `platform.machine()` for desktop-arch checks. |
-| `COLORTERM` / `TERM` | Truecolor sprites. |
+| `GROK_BOT_ACCESS_TOKEN` | Override session token (tests). Chat otherwise decrypts grok-bot’s store. |
+| `GROK_BOT_SECRETS` | Override path to `sand-secrets.json`. |
+| `GROK_TUI_NO_ELECTRON` | Set to `1` to skip the grok-bot helper (unit tests). |
+| `COLORTERM` / `TERM` | Color sprites (`truecolor` / `256color`). |
 
 ## Files and paths
 
@@ -455,7 +455,7 @@ Examples use `$HOME` and `/opt/grok-bot` only.
 
 | Path | Who writes it | What |
 | --- | --- | --- |
-| `$HOME/.config/Grok Bot/` | grok-bot | Electron user-data. Roster cache in `sand-client-persistence/`. **Do not copy Cookies.** |
+| `$HOME/.config/Grok Bot/` | grok-bot | Electron user-data. Roster cache in `sand-client-persistence/`. Session in `sand-secrets.json`. **Do not copy Cookies.** |
 | `$HOME/.grokbot/settings.json` | grok-bot | Onboarding / account-scope markers. |
 | `$HOME/.grok-bot-tui/ignore-gui-session` | this TUI | `/logout` opt-out. |
 | `$HOME/.grok-bot-tui/usage.jsonl` | this TUI | Optional API token counts. |
@@ -467,7 +467,7 @@ Examples use `$HOME` and `/opt/grok-bot` only.
 ## Privacy
 
 - No Cookies. Session tokens are read from grok-bot’s `sand-secrets.json`
-  `cursor-accounts` only and never printed.
+  `cursor-accounts` (Electron `safeStorage`, same app as the GUI) and never printed.
 - `/whoami` never prints a full key or email.
 - Roster rows keep `id`, `name`, and a short blurb only (no `lastEntry` text).
 - Docs and tests use `$HOME`, `/opt/grok-bot`, and `user@example.org`.
@@ -476,8 +476,8 @@ Examples use `$HOME` and `/opt/grok-bot` only.
 
 | Symptom | What to do |
 | --- | --- |
-| Header `0.3.0` and bots named Sales Outbound / Talent Scout / Chief of Staff | Stale install. `./grok-bot-tui/install.sh --yes`, quit the TUI, run `grok-tui-shell` again. Header must be **0.6.0** and the list heading must say `from signed-in Grok Bot`. |
-| Signed out even though grok-bot shows Gmail | `/login`, or check `$HOME/.grokbot/settings.json` exists for this user. `XDG_CONFIG_HOME` must match the desktop. |
+| Header `0.3.0` and bots named Sales Outbound / Talent Scout / Chief of Staff | Stale install. `./grok-bot-tui/install.sh --yes`, quit the TUI, run `grok-tui-shell` again. Header must be **0.7.0** and the list heading must say `from signed-in Grok Bot`. |
+| Signed out even though grok-bot is signed in | `/login`, or check `$HOME/.grokbot/settings.json` exists for this user. `XDG_CONFIG_HOME` must match the desktop. |
 | `No bots in the Grok Bot cache yet` | Open grok-bot so it writes `sand-client-persistence`, then `/agents`. |
 | List does not match the GUI | `/agents`. Hidden bots stay hidden. Pin order follows the GUI. |
 | `/login` says grok-bot not found | Install the desktop on x86_64; put `grok-bot` on `PATH` or under `/opt/grok-bot`. |

@@ -1,6 +1,6 @@
 """Grok GUI TUI shell: companion terminal client. This is not Grok."""
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 PROG = "grok-tui-shell"
 TITLE = "Grok GUI TUI shell"
 STATUS = "Grok GUI TUI shell"

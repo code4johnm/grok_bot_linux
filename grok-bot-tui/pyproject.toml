@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "grok-bot-tui"
-version = "0.6.0"
+version = "0.7.0"
 description = "Grok GUI TUI shell — companion client (not Grok)"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -23,6 +23,9 @@ grok-tui-shell = "grok_bot_tui.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+grok_bot_tui = ["decrypt_session/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

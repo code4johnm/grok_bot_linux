@@ -17,7 +17,7 @@ from grok_bot_tui.grok_bot_session import BOT_ONBOARDING_URL
 # Official console (API-key fallback only — not Grok Bot SSO).
 CONSOLE_LOGIN_URL = "https://console.x.ai/login"
 CONSOLE_KEYS_URL = "https://console.x.ai/team/default/api-keys"
-# Same onboarding URL the grok-bot Electron app uses (Cursor SSO / Gmail).
+# Same onboarding URL the grok-bot Electron app uses.
 DEFAULT_AUTHORIZE_URL = BOT_ONBOARDING_URL
 
 

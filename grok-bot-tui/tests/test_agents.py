@@ -77,6 +77,8 @@ def test_empty_agents_and_nav() -> None:
     assert handle_command("/login", state).kind == "login"
     listed = render_agent_list(state, terminal_width=80)
     assert "2 from signed-in Grok Bot" in listed
+    assert "▀" in listed
+    assert "\033[" in listed
     assert any("Grok 4.6" in ln and "flagship" in ln for ln in listed.splitlines())
     data_rows = [ln for ln in listed.splitlines() if "flagship" in ln or "prior" in ln]
     assert len(data_rows) == 2

@@ -116,6 +116,20 @@ def test_gui_aarch64_does_not_launch(tmp_path: Path) -> None:
     assert "Chat still works" in msg
 
 
+def test_find_electron_skips_launch_sh(tmp_path: Path) -> None:
+    from grok_bot_tui.gui import find_electron
+
+    sh = tmp_path / "launch.sh"
+    sh.write_text("#!/bin/sh\n")
+    sh.chmod(0o755)
+    electron = tmp_path / "grok-bot"
+    electron.write_text("#!/bin/sh\n")
+    electron.chmod(0o755)
+    (tmp_path / "chrome-sandbox").write_text("")
+    assert find_electron(candidates=[sh, electron]) == electron
+    assert find_electron(candidates=[sh]) is None
+
+
 def test_gui_missing_on_x86_no_browser() -> None:
     msg = launch_grok_bot(popen=lambda *_a, **_k: None, candidates=[], arch="x86_64")
     assert msg == MISSING_DESKTOP
@@ -143,6 +157,7 @@ def test_commands_gui_clear_quit_help_bot_chat() -> None:
     assert slash.send_text == "later"
     assert "Chat stays in this terminal" in help_result.message
     assert "Messages to Bots run in Grok Bot" not in help_result.message
+    assert "Gmail" not in help_result.message
 
 
 def test_send_chat_stays_in_terminal() -> None:
@@ -161,6 +176,7 @@ def test_send_chat_stays_in_terminal() -> None:
     notes: list[str] = []
     _send_chat(state, None, "hello", emit=notes.append)
     assert NEED_BOT_MSG in notes
+    assert "Gmail" not in NEED_BOT_MSG
     assert any(item.get("role") == "user" and item.get("content") == "hello" for item in state.messages)
     assert any(item.get("role") == "assistant" and NEED_BOT_MSG in (item.get("content") or "") for item in state.messages)
     source = (PKG / "src/grok_bot_tui/app.py").read_text(encoding="utf-8")
@@ -244,7 +260,7 @@ def test_package_is_not_grok() -> None:
     assert "does **not** read Cookies" in readme
     assert "does **not** call the official `grok` CLI" in readme
     assert "Sales Outbound" in readme  # documented as stale-install symptom only
-    assert "0.6.0" in readme
+    assert "0.7.0" in readme
     assert "Chat stays in this terminal" in readme or "chat stays" in readme.lower()
     assert "Raspberry Pi" in readme
     assert "install.sh" in readme

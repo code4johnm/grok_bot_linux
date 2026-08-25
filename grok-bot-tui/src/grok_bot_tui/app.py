@@ -44,15 +44,13 @@ from grok_bot_tui.gui import launch_grok_bot
 from grok_bot_tui.pixel import sprite_inline
 
 NEED_BOT_MSG = (
-    "Chat uses your Grok Bot session, not an API key. "
-    "I could not read the session token the desktop encrypts. "
-    "Keep grok-bot signed in (Gmail), then send again."
+    "Could not read Grok Bot credentials. Chat uses the same session as grok-bot."
 )
 
 HELP = f"""{TITLE}
 Companion TUI for Grok Bot. Chat stays in this terminal. This is not Grok.
 
-  /login          Grok Bot SSO (Gmail in grok-bot) — this session is used for chat
+  /login          Sign in with grok-bot — this TUI uses that same session
   /logout         Sign this TUI out
   /whoami         Show Grok Bot session label
   /agents         Refresh bots from the signed-in Grok Bot roster
@@ -348,7 +346,7 @@ def _do_sso_login(
 
     url = signin_url()
     link = SignInLink(url=url)
-    log("Complete sign-in in Grok Bot (same as the GUI: Gmail / Cursor SSO).")
+    log("Complete sign-in in Grok Bot (same window as the GUI).")
     log("Cookies are not scraped.")
     for row in link.display_lines():
         log(row)
@@ -576,6 +574,13 @@ def run_shell(
             if state.streaming:
                 emit("still responding…")
                 return True
+            if not isinstance(client, GrokBotClient):
+                token = load_access_token()
+                if token:
+                    if client is not None:
+                        client.close()
+                    client = GrokBotClient(token, timeout=min(cfg.timeout, 120.0))
+                    holder["client"] = client
 
             def refresh() -> None:
                 app = holder.get("app")
@@ -703,7 +708,7 @@ def _send_chat(
     if not isinstance(client, GrokBotClient):
         token = load_access_token()
         if token:
-            client = GrokBotClient(token)
+            client = GrokBotClient(token, timeout=120.0)
         else:
             state.messages.append({"role": "user", "content": text})
             state.messages.append({"role": "assistant", "content": NEED_BOT_MSG})

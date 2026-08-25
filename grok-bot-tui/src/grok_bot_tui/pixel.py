@@ -12,10 +12,34 @@ SPRITE_H = 8
 
 
 def _truecolor() -> bool:
+    if os.environ.get("NO_COLOR", "").strip():
+        return False
     term = os.environ.get("COLORTERM", "").lower()
     if "truecolor" in term or "24bit" in term:
         return True
     return os.environ.get("TERM", "").endswith("-direct")
+
+
+def _use_256() -> bool:
+    if os.environ.get("NO_COLOR", "").strip():
+        return False
+    if _truecolor():
+        return True
+    term = os.environ.get("TERM", "")
+    if term in ("", "dumb"):
+        return False
+    return True
+
+
+def _xterm256(r: int, g: int, b: int) -> int:
+    def cube(v: int) -> int:
+        if v < 48:
+            return 0
+        if v < 115:
+            return 1
+        return min(5, (v - 35) // 40)
+
+    return 16 + 36 * cube(r) + 6 * cube(g) + cube(b)
 
 
 def _hash_bytes(seed: str) -> bytes:
@@ -25,7 +49,9 @@ def _hash_bytes(seed: str) -> bytes:
 def palette_for(seed: str) -> tuple[int, int, int]:
     digest = _hash_bytes(seed)
     hue = digest[0] / 255.0
-    r, g, b = colorsys.hsv_to_rgb(hue, 0.55, 0.95)
+    sat = 0.55 + (digest[1] / 255.0) * 0.4
+    val = 0.75 + (digest[2] / 255.0) * 0.25
+    r, g, b = colorsys.hsv_to_rgb(hue, min(sat, 1.0), min(val, 1.0))
     return int(r * 255), int(g * 255), int(b * 255)
 
 
@@ -57,8 +83,18 @@ def bitmap_from_seed(seed: str, width: int = SPRITE_W, height: int = SPRITE_H) -
 def _fg(r: int, g: int, b: int, truecolor: bool) -> str:
     if truecolor:
         return f"\033[38;2;{r};{g};{b}m"
-    # Map to 16-color: 90–97 bright
+    if _use_256():
+        return f"\033[38;5;{_xterm256(r, g, b)}m"
     idx = 90 + ((r > 127) + (g > 127) * 2 + (b > 127) * 4) % 8
+    return f"\033[{idx}m"
+
+
+def _bg(r: int, g: int, b: int, truecolor: bool) -> str:
+    if truecolor:
+        return f"\033[48;2;{r};{g};{b}m"
+    if _use_256():
+        return f"\033[48;5;{_xterm256(r, g, b)}m"
+    idx = 100 + ((r > 127) + (g > 127) * 2 + (b > 127) * 4) % 8
     return f"\033[{idx}m"
 
 
@@ -108,18 +144,15 @@ def sprite_column(seed: str, *, terminal_width: int = 80) -> list[str]:
 
 
 def sprite_inline(seed: str, *, terminal_width: int = 80, truecolor: bool | None = None) -> str:
-    """One list-row icon. Full blocks only so adjacent bots do not bleed."""
-    rgb = palette_for(seed)
+    """One-row 4-wide icon: each cell is a two-color ▀ (top fg, bottom bg)."""
     use_tc = _truecolor() if truecolor is None else truecolor
-    color = _fg(*rgb, use_tc)
     if terminal_width < 48:
+        rgb = palette_for(seed)
         letter = (seed.strip() or "?")[0].upper()
-        return color + f"[{letter}]" + RESET
-    digest = _hash_bytes(seed + ":inline")
-    bits = [(digest[0] >> i) & 1 for i in range(4)]
-    if sum(bits) == 0:
-        bits[0] = 1
-    if sum(bits) == 4:
-        bits[3] = 0
-    cells = "".join("█" if bit else "░" for bit in bits)
-    return color + cells + RESET
+        return _fg(*rgb, use_tc) + f"[{letter}]" + RESET
+    cells: list[str] = []
+    for i in range(4):
+        top = palette_for(f"{seed}:icon:{i}:t")
+        bot = palette_for(f"{seed}:icon:{i}:b")
+        cells.append(_fg(*top, use_tc) + _bg(*bot, use_tc) + "▀")
+    return "".join(cells) + RESET

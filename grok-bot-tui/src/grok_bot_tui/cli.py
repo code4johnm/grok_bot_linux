@@ -67,7 +67,7 @@ def _bots(cfg: Config) -> int:
         print(json.dumps({"signed_in": ident.signed_in, "bots": safe}))
         return 0 if safe else 1
     if not ident.signed_in:
-        print("signed out. Open grok-bot, sign in (Gmail / Cursor SSO), then retry.")
+        print("signed out. Open grok-bot, sign in, then retry.")
         return 1
     if not safe:
         print("no bots in the Grok Bot cache yet. Open grok-bot, then retry.")
@@ -123,7 +123,7 @@ def _chat(cfg: Config) -> int:
     if not token:
         print(
             "Chat uses Grok Bot credentials, not an API key. "
-            "Sign in with grok-bot (Gmail), then retry.",
+            "Sign in with grok-bot, then retry.",
             file=sys.stderr,
         )
         return 2
