@@ -30,10 +30,11 @@ HELP = f"""{TITLE}  ({PROG})
 Status: {STATUS}. This wraps Grok Bot, not Grok the chat app at grok.com.
 
 Default: official grok CLI (Grok Build TUI). Empty Enter or /grok launches it.
-/gui opens packaged grok-bot or {GROK_BOT_URL} — never grok.com.
+/gui starts packaged grok-bot or launch.sh (chrome-sandbox), else {GROK_BOT_URL}.
+Never grok.com. This TUI does not replace the Electron grok-bot tree.
 
 Commands:
-  /gui            Launch grok-bot desktop, else {GROK_BOT_URL}
+  /gui            Launch grok-bot / launch.sh, else {GROK_BOT_URL}
   /grok [flags]   Run official grok (flags from grok --help only)
   Enter           Same as /grok with no extra flags
   /plan [flags]   Launch grok in official plan mode (omit --no-plan)
@@ -255,7 +256,7 @@ def run_shell(
     state = SessionState(system=cfg.system, model=cfg.model, has_api=cfg.has_api_key)
     session: PromptSession[str] = PromptSession(bottom_toolbar=lambda: _toolbar(state))
     print(f"{TITLE}  {PROG} {__version__}")
-    print(f"{STATUS}. /gui → grok-bot or {GROK_BOT_URL}. Default: official grok CLI.")
+    print(f"{STATUS}. /gui → grok-bot/launch.sh or {GROK_BOT_URL}. Default: official grok CLI.")
     print(f"Local pane: {state.pane_label}. Type /help for commands.")
     with patch_stdout():
         while True:

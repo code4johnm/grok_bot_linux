@@ -22,7 +22,7 @@ def test_help_lists_companion_commands() -> None:
         assert name in text
     assert "/send" not in text
     assert "Grok API (not Grok Bot)" in text
-    assert "grok.com" not in text
+    assert "https://grok.com" not in text
 
 
 def test_prompt_list_is_offline() -> None:

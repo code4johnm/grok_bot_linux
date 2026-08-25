@@ -12,7 +12,7 @@ import pytest
 from grok_bot_tui import PROG, STATUS, TITLE
 from grok_bot_tui.app import HELP, PANE_API, SessionState, handle_command
 from grok_bot_tui.config import DEFAULT_MODEL, build_parser, load_config
-from grok_bot_tui.gui import GROK_BOT_URL, launch_grok_bot
+from grok_bot_tui.gui import GROK_BOT_URL, find_desktop, launch_grok_bot
 
 PKG = Path(__file__).resolve().parents[1]
 
@@ -26,8 +26,9 @@ def test_help_shows_companion_branding() -> None:
     assert "Grok GUI companion" not in text
     assert "Grok terminal" not in text
     assert GROK_BOT_URL in text
-    assert "grok.com" not in text
+    assert "https://grok.com" not in text
     assert "/grok" in text
+    assert "not a replacement" in text.lower() or "launcher" in text.lower()
 
 
 def test_module_help_exits_zero_without_key() -> None:
@@ -45,7 +46,8 @@ def test_module_help_exits_zero_without_key() -> None:
     assert "Grok Bot companion" in proc.stdout
     assert PROG in proc.stdout
     assert "/grok" in proc.stdout
-    assert "grok.com" not in proc.stdout
+    assert "https://grok.com" not in proc.stdout
+    assert "x.ai/bot" in proc.stdout
 
 
 def test_load_config_without_key_still_works(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -85,6 +87,50 @@ def test_gui_prefers_desktop_over_url(tmp_path: Path) -> None:
     assert seen_urls == []
     assert "grok.com" not in msg
     assert str(desktop) in msg
+
+
+def test_gui_prefers_launch_sh_over_electron_binary(tmp_path: Path) -> None:
+    electron_dir = tmp_path / "opt" / "grok-bot"
+    electron_dir.mkdir(parents=True)
+    binary = electron_dir / "grok-bot"
+    binary.write_text("#!/bin/sh\n")
+    binary.chmod(0o755)
+    (electron_dir / "chrome-sandbox").write_text("sandbox")
+    (electron_dir / "chrome_100_percent.pak").write_text("pak")
+    launcher = tmp_path / "launch.sh"
+    launcher.write_text("#!/bin/sh\n")
+    launcher.chmod(0o755)
+
+    assert find_desktop([binary, launcher]) == launcher
+    spawned: list[list[str]] = []
+    seen_urls: list[str] = []
+
+    def fake_open(url: str) -> bool:
+        seen_urls.append(url)
+        return True
+
+    def fake_popen(cmd: list[str], **_kwargs: object) -> object:
+        spawned.append(cmd)
+        return object()
+
+    msg = launch_grok_bot(opener=fake_open, popen=fake_popen, candidates=[binary, launcher])
+    assert spawned == [[str(launcher)]]
+    assert seen_urls == []
+    assert "launch.sh" in msg
+    assert "grok.com" not in msg
+
+
+def test_electron_packaging_tree_is_untouched() -> None:
+    """Companion must not replace the Electron grok-bot tree (PR #2 was reverted)."""
+    repo = PKG.parent
+    for relative in ("launch.sh", "install.sh", "uninstall.sh", "app/README.md"):
+        assert (repo / relative).is_file(), relative
+    app_readme = (repo / "app/README.md").read_text()
+    assert "Electron" in app_readme
+    assert "chrome-sandbox" in app_readme
+    launch = (repo / "launch.sh").read_text()
+    assert "chrome-sandbox" in launch
+    assert "Electron" in launch
 
 
 def test_gui_falls_back_to_x_ai_bot_not_grok_com() -> None:
@@ -132,7 +178,7 @@ def test_commands_gui_clear_quit_help_notes() -> None:
     assert "Grok API (not Grok Bot)" in help_result.message
     assert "/send" not in help_result.message
     assert "x.ai/bot" in help_result.message
-    assert "never grok.com" in help_result.message
+    assert "never grok.com" in help_result.message.lower()
     assert TITLE in help_result.message
     assert PANE_API in help_result.message
     assert handle_command("/notes", state).kind == "notes"
@@ -184,7 +230,9 @@ def test_package_does_not_claim_to_be_grok_the_product() -> None:
     assert "Grok GUI companion" not in blob
     assert "Grok terminal" not in blob
     assert "this TUI is Grok" not in blob.lower()
+    assert "does not replace" in blob.lower() or "does **not** replace" in blob
     assert "https://x.ai/bot" in blob
+    assert "launch.sh" in blob
     for path in (PKG / "src/grok_bot_tui").glob("*.py"):
         text = path.read_text()
         assert "Grok terminal" not in text

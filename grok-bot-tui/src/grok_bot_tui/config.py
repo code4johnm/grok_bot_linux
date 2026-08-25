@@ -53,8 +53,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=PROG,
         description=(
-            f"{TITLE} — wraps Grok Bot, not Grok the chat app. "
-            f"/gui opens the packaged grok-bot desktop or {GROK_BOT_URL}. "
+            f"{TITLE} — launcher around Grok Bot, not a replacement for Electron grok-bot. "
+            f"/gui starts grok-bot or launch.sh, else {GROK_BOT_URL}. Never grok.com. "
             "Default action is the official grok CLI (Grok Build TUI). "
             "/chat is optional Grok API (not Grok Bot)."
         ),
