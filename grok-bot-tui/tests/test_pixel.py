@@ -30,14 +30,22 @@ def test_narrow_terminal_collapses_to_letter() -> None:
 
 
 def test_sprite_inline_is_one_row() -> None:
-    from grok_bot_tui.pixel import sprite_inline
+    from grok_bot_tui.pixel import SCHEME, palette_for, sprite_inline
 
+    assert palette_for("sales-outbound") in SCHEME
     glyph = sprite_inline("sales-outbound", terminal_width=80, truecolor=True)
     assert "\n" not in glyph
     assert "▀" in glyph
     assert glyph.count("▀") == 4
     assert "\033[38;2;" in glyph
     assert "\033[48;2;" in glyph
+    used = set()
+    for rgb in SCHEME:
+        token = f"{rgb[0]};{rgb[1]};{rgb[2]}"
+        if token in glyph:
+            used.add(rgb)
+    assert used, glyph
+    assert used <= set(SCHEME)
     other = sprite_inline("talent-scout", terminal_width=80, truecolor=True)
     assert glyph != other
     narrow = sprite_inline("sales-outbound", terminal_width=20, truecolor=True)

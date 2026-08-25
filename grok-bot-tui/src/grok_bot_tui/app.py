@@ -43,7 +43,7 @@ from grok_bot_tui.grok_bot_session import (
     wait_for_gui_session,
 )
 from grok_bot_tui.gui import launch_grok_bot
-from grok_bot_tui.pixel import sprite_inline
+from grok_bot_tui.pixel import BLACK, GREY, RED, WHITE, hex_color, sprite_inline
 
 NEED_BOT_MSG = (
     "Could not read Grok Bot credentials. Chat uses the same session as grok-bot."
@@ -169,7 +169,10 @@ def render_agent_list(state: SessionState, *, terminal_width: int | None = None)
         return "\n".join(lines)
     name_w = 22
     for i, agent in enumerate(state.agents):
-        mark = ">" if i == state.agent_index else " "
+        if i == state.agent_index:
+            mark = f"\033[38;2;{RED[0]};{RED[1]};{RED[2]}m>\033[0m"
+        else:
+            mark = " "
         glyph = sprite_inline(agent.seed, terminal_width=width, truecolor=True)
         name = agent.name if len(agent.name) <= name_w else agent.name[: name_w - 1] + "…"
         blurb = agent.blurb if len(agent.blurb) <= 36 else agent.blurb[:33] + "…"
@@ -678,7 +681,7 @@ def run_shell(
         HSplit(
             [
                 Window(FormattedTextControl(header_text), height=1, style="class:header"),
-                Window(FormattedTextControl(body_text), wrap_lines=True),
+                Window(FormattedTextControl(body_text), wrap_lines=True, style="class:body"),
                 Window(height=1, char="─", style="class:rule"),
                 Window(
                     BufferControl(
@@ -694,10 +697,12 @@ def run_shell(
     )
     style = Style.from_dict(
         {
-            "header": "bold reverse",
-            "footer": "reverse",
-            "rule": "ansibrightblack",
-            "prompt": "bold ansicyan",
+            "header": f"bold bg:{hex_color(RED)} fg:{hex_color(WHITE)}",
+            "footer": f"bg:{hex_color(BLACK)} fg:{hex_color(GREY)}",
+            "rule": f"fg:{hex_color(GREY)}",
+            "prompt": f"bold fg:{hex_color(RED)}",
+            "compose": f"bg:{hex_color(BLACK)} fg:{hex_color(WHITE)}",
+            "body": f"bg:{hex_color(BLACK)} fg:{hex_color(WHITE)}",
         }
     )
     if sys.stdin.isatty() and os.environ.get("GROK_TUI_NO_COLOR", "").strip() != "1":

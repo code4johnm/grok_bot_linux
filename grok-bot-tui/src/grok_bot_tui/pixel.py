@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
-import colorsys
 import hashlib
 import os
 from collections.abc import Sequence
 
 SPRITE_W = 8
 SPRITE_H = 8
+
+# TUI scheme: red, black, white, red, grey.
+RED = (196, 18, 28)
+BLACK = (0, 0, 0)
+WHITE = (245, 245, 245)
+RED_DARK = (139, 0, 18)
+GREY = (142, 142, 142)
+SCHEME: tuple[tuple[int, int, int], ...] = (RED, BLACK, WHITE, RED_DARK, GREY)
 
 
 def _truecolor() -> bool:
@@ -49,13 +56,13 @@ def _hash_bytes(seed: str) -> bytes:
     return hashlib.sha256(seed.encode("utf-8")).digest()
 
 
+def hex_color(rgb: tuple[int, int, int]) -> str:
+    return f"#{rgb[0]:02x}{rgb[1]:02x}{rgb[2]:02x}"
+
+
 def palette_for(seed: str) -> tuple[int, int, int]:
     digest = _hash_bytes(seed)
-    hue = digest[0] / 255.0
-    sat = 0.55 + (digest[1] / 255.0) * 0.4
-    val = 0.75 + (digest[2] / 255.0) * 0.25
-    r, g, b = colorsys.hsv_to_rgb(hue, min(sat, 1.0), min(val, 1.0))
-    return int(r * 255), int(g * 255), int(b * 255)
+    return SCHEME[digest[0] % len(SCHEME)]
 
 
 def bitmap_from_seed(seed: str, width: int = SPRITE_W, height: int = SPRITE_H) -> list[list[int]]:
