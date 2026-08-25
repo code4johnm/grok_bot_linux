@@ -1,19 +1,20 @@
-"""Sign-in: OSC 8 link, loopback catcher, API-key store. No cookie scraping."""
+"""Sign-in: OSC 8 console link + one-time API key paste. No cookie scraping.
+
+True click-to-authorize needs an official xAI OAuth/device flow. Until that
+exists, easy sign-on is: open the console, paste a key once, store it at 0600.
+"""
 
 from __future__ import annotations
 
 import json
 import os
-import secrets
 import stat
-import threading
 import webbrowser
 from collections.abc import Callable
 from dataclasses import dataclass
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs, urlencode, urlparse
+from urllib.parse import urlencode
 
 # Official console (no public third-party OAuth client for companion apps).
 CONSOLE_LOGIN_URL = "https://console.x.ai/login"
@@ -51,7 +52,11 @@ def build_authorize_url(
     state: str,
     authorize_endpoint: str | None = None,
 ) -> str:
-    """PKCE/authorize URL builder. Used when XAI_OAUTH_CLIENT_ID is set."""
+    """OAuth authorize URL builder for when xAI ships a public client.
+
+    Not used by the default login path (API key paste). Kept so a real
+    device/OAuth flow can plug in without changing the TUI chrome.
+    """
     base = (
         authorize_endpoint
         or os.environ.get("XAI_OAUTH_AUTHORIZE_URL", "").strip()
@@ -165,71 +170,6 @@ class CredentialStore:
             keyring.delete_password("grok-tui-shell", "api_key")
         except Exception:
             return
-
-
-class LoopbackCatcher:
-    """127.0.0.1 ephemeral server. Accepts ?api_key= or ?code= on /callback."""
-
-    def __init__(self, host: str = "127.0.0.1", port: int = 0) -> None:
-        self.host = host
-        self._wanted_port = port
-        self.httpd: HTTPServer | None = None
-        self.thread: threading.Thread | None = None
-        self.event = threading.Event()
-        self.result: dict[str, str] = {}
-        self.state = secrets.token_urlsafe(16)
-
-    @property
-    def port(self) -> int:
-        if self.httpd is None:
-            return 0
-        return int(self.httpd.server_address[1])
-
-    @property
-    def callback_url(self) -> str:
-        return f"http://{self.host}:{self.port}/callback"
-
-    def start(self) -> str:
-        catcher = self
-
-        class Handler(BaseHTTPRequestHandler):
-            def do_GET(self) -> None:  # noqa: N802
-                parsed = urlparse(self.path)
-                if parsed.path not in ("/callback", "/", "/login"):
-                    self.send_error(404)
-                    return
-                qs = parse_qs(parsed.query)
-                payload: dict[str, str] = {}
-                for name in ("api_key", "key", "code", "state", "error"):
-                    vals = qs.get(name)
-                    if vals:
-                        payload[name] = vals[0]
-                catcher.result = payload
-                catcher.event.set()
-                body = b"<html><body>You can close this tab and return to Grok GUI TUI shell.</body></html>"
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-
-            def log_message(self, fmt: str, *args: object) -> None:
-                return
-
-        self.httpd = HTTPServer((self.host, self._wanted_port), Handler)
-        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
-        self.thread.start()
-        return self.callback_url
-
-    def wait(self, timeout: float = 180.0) -> dict[str, str]:
-        self.event.wait(timeout)
-        return dict(self.result)
-
-    def stop(self) -> None:
-        if self.httpd is not None:
-            self.httpd.shutdown()
-            self.httpd.server_close()
-            self.httpd = None
 
 
 def open_browser(url: str, opener: Callable[[str], bool] | None = None) -> bool:

@@ -52,7 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog=PROG,
         description=(
             f"{TITLE} — companion TUI for the Grok GUI. "
-            "/login opens the official console (OSC 8 + raw URL). "
+            "/login opens the official console (OSC 8 + raw URL); paste a key once. "
             "/gui launches packaged grok-bot on x86_64. "
             "This is not Grok."
         ),

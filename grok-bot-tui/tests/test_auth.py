@@ -1,4 +1,4 @@
-"""Offline: OSC 8 links, authorize URL, credential file 0600. HTTP mocked."""
+"""Offline: OSC 8 console link, authorize-URL hook, credential file 0600."""
 
 from __future__ import annotations
 

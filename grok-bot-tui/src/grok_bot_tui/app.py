@@ -13,9 +13,7 @@ from prompt_toolkit.patch_stdout import patch_stdout
 from grok_bot_tui import PROG, TITLE, __version__
 from grok_bot_tui.agents import Agent, AgentCatalog
 from grok_bot_tui.auth import (
-    CONSOLE_KEYS_URL,
     CredentialStore,
-    LoopbackCatcher,
     SignInLink,
     mask_secret,
     open_browser,
@@ -30,7 +28,7 @@ from grok_bot_tui.usage import append_usage_line
 HELP = f"""{TITLE}
 Companion TUI for the Grok GUI. This is not Grok.
 
-  /login          Sign in (browser link + paste key, or XAI_API_KEY)
+  /login          Open console link; paste API key once (or XAI_API_KEY)
   /logout         Forget stored credentials
   /whoami         Show truncated account/key label
   /agents         Refresh agent/model list
@@ -118,12 +116,11 @@ def render_signin(state: SessionState) -> str:
         TITLE,
         "signed out",
         "",
-        "Sign in with the official console (API key). No cookies are scraped.",
+        "Easy sign-on: open the official console, paste an API key once.",
+        "No OAuth device flow is published for third-party apps; cookies are not scraped.",
         *link.display_lines(),
         "",
-        "Press Enter to open the browser, then paste the key, or /login",
-        "Loopback callback (optional): start /login then open",
-        "http://127.0.0.1:<port>/callback?api_key=…",
+        "Enter or /login opens the browser. Then paste the key at compose.",
         "",
         TITLE,
     ]
@@ -253,27 +250,15 @@ def _do_login(
 
     url = signin_url()
     link = SignInLink(url=url)
-    catcher = LoopbackCatcher()
-    callback = catcher.start()
     state.auth_state = "waiting"
-    print("Complete sign-in in browser…")
+    print("Open the official console, create a key, paste it once.")
     for line in link.display_lines():
         print(line)
-    print(f"Loopback (needs a free 127.0.0.1 port): {callback}?api_key=YOUR_KEY")
-    print("Paste the API key here, or finish in the browser callback.")
     opened = open_browser(url, opener=open_fn)
     if not opened:
-        print("(could not open a browser; copy the URL above)")
-    try:
-        got = catcher.wait(timeout=1.0)
-        key = (got.get("api_key") or got.get("key") or got.get("code") or "").strip()
-        if key:
-            client, catalog = _apply_key(state, store, key, cfg)
-            return client, catalog, f"signed in as {state.auth_label}"
-    finally:
-        catcher.stop()
+        print("(could not open a browser; copy the raw URL above)")
     state.auth_state = "signed_out"
-    return None, None, "waiting for key — paste it, or /login <key>"
+    return None, None, "waiting for key — paste it at compose, or /login <key>"
 
 
 def run_shell(

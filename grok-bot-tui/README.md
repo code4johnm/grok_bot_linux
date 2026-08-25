@@ -3,26 +3,31 @@
 Companion terminal client for the Grok GUI. **This is not Grok** and is not a
 rebrand of Grok Bot. Footer/title: `Grok GUI TUI shell`.
 
-## Sign-in
+## Sign-in (honest MVP)
 
-xAI’s public API uses **API keys** from the console (see
-[docs.x.ai quickstart](https://docs.x.ai/developers/quickstart)). There is no
-documented third-party OAuth client for companion apps, so this shell does
-**not** scrape browser cookies.
+True “click link → authorize app → TUI signed in” needs an **official**
+OAuth or device-code flow. xAI’s public API today is **API keys** from the
+console ([docs.x.ai quickstart](https://docs.x.ai/developers/quickstart)).
+This shell does **not** scrape cookies or pretend to be an OAuth client.
 
-1. Unsigned view shows an OSC 8 hyperlink **Sign in with browser** plus the
-   raw URL (copy/paste if the terminal has no OSC 8).
-2. Press Enter or `/login` to open `https://console.x.ai/team/default/api-keys`.
-3. Create a key, paste it into the TUI (or hit
-   `http://127.0.0.1:<ephemeral-port>/callback?api_key=…` on loopback).
-4. `XAI_API_KEY` / `GROK_API_KEY` still work for non-interactive auth.
+Easy sign-on:
 
-Credentials: platform keyring when available, else
+1. Unsigned view: OSC 8 **Sign in with browser** plus the raw URL
+   (`https://console.x.ai/team/default/api-keys`). Terminals without OSC 8
+   still get the URL.
+2. Enter or `/login` opens that page (`webbrowser.open`).
+3. Paste the key **once** at `compose>` (or `/login <key>`).
+4. `XAI_API_KEY` / `GROK_API_KEY` still work non-interactively.
+
+Credentials: keyring when available, else
 `$HOME/.config/grok-tui-shell/credentials` mode `0600`. Never printed in full.
-`/whoami` shows a truncated label. `/logout` deletes the store.
+`/whoami` shows a truncated label. `/logout` clears the store.
 
-Loopback needs a free `127.0.0.1` port. If `XAI_OAUTH_CLIENT_ID` is set, the
-shell can build a standard authorize URL (`auth.build_authorize_url`).
+`auth.build_authorize_url` exists only as a hook if xAI later publishes a
+public OAuth client. It is not the default path.
+
+Pixel “bots” in the terminal are hash-based half-block sprites and work
+whether you signed in via paste or env.
 
 ## Agents / models
 
@@ -67,8 +72,8 @@ Sign in with browser          ← OSC 8 (also printed as raw URL)
 https://console.x.ai/team/default/api-keys
 Press Enter to open the browser, then paste the key, or /login
 compose> /login
-Complete sign-in in browser…
-compose> xai-…                ← paste (never logged in full)
+Open the official console, create a key, paste it once.
+compose> xai-…                ← paste once (never logged in full)
 signed in as xai-…abcd
 Agents / models
 > ██▀▄…  grok-4.6
