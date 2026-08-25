@@ -1,0 +1,98 @@
+.TH GROK-TUI-SHELL 1 "2026" "grok-bot-tui 0.4.0" "User Commands"
+.SH NAME
+grok-tui-shell, grok-bot-tui \- companion TUI for Grok Bot (not Grok)
+.SH SYNOPSIS
+.B grok-tui-shell
+[\fIOPTIONS\fR] [\fItui\fR | \fIversion\fR | \fIwhoami\fR | \fIbots\fR | \fIstatus\fR]
+.SH DESCRIPTION
+.B grok-tui-shell
+is a lightweight terminal client for
+.B Grok Bot
+(the Electron desktop app). It is
+.B not
+Grok, not grok.com chat, and not the official
+.B grok
+CLI.
+.PP
+Interactive mode (default
+.BR tui )
+needs a TTY. On Raspberry Pi, run it in a terminal, over SSH, or inside
+.B tmux
+(see AUTO-START).
+.PP
+Sign-in uses the same Cursor SSO as Grok Bot (Gmail in the grok-bot window).
+The TUI does not read Cookies and does not call
+.B grok login
+.BR .
+Electron grok-bot is x86_64 only; the TUI itself runs on x86_64, aarch64, and
+armv7l (Raspberry Pi 3/4/5).
+.SH COMMANDS
+.TP
+.B tui
+Fullscreen TUI (default).
+.TP
+.B version
+Print version.
+.TP
+.B whoami
+Print signed-in label or "signed out". Exit 1 if signed out.
+.TP
+.B bots
+List bots from the signed-in Grok Bot roster cache.
+.TP
+.B status
+Arch, Python, desktop availability, signed-in, bot count.
+.SH OPTIONS
+.TP
+.B \-\-json
+JSON for version/whoami/bots/status.
+.TP
+.B \-\-api-key \fIKEY\fR
+Optional api.x.ai key (or XAI_API_KEY). Not Grok Bot SSO.
+.TP
+.B \-\-model \fIID\fR
+.TP
+.B \-\-base-url \fIURL\fR
+.TP
+.B \-\-timeout \fISECONDS\fR
+.TP
+.B \-\-help
+.SH TUI KEYS
+.B /login
+launch grok-bot + Cursor onboarding.
+.B /agents
+refresh roster.
+.B j/k
+move.
+.B Enter
+select.
+.B /gui
+launch desktop (x86_64).
+.B /quit
+exit.
+.SH FILES
+.TP
+.I $HOME/.config/grok-bot-tui/config.json
+Non-secret defaults (model, timeout, base_url).
+.TP
+.I $HOME/.config/grok-tui-shell/credentials
+Optional API key, mode 0600.
+.TP
+.I $HOME/.config/Grok Bot/sand-client-persistence/
+Grok Bot roster cache (read names only; never Cookies).
+.SH AUTO-START
+User systemd unit
+.B grok-tui-shell.service
+starts a tmux session named
+.BR grok-tui .
+On a headless Raspberry Pi:
+.PP
+.nf
+loginctl enable-linger "$USER"
+systemctl --user enable --now grok-tui-shell.service
+tmux attach -t grok-tui
+.fi
+.SH SEE ALSO
+README in the grok-bot-tui package.
+.SH NOTES
+This is not Grok.

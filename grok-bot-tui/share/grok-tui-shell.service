@@ -1,0 +1,18 @@
+[Unit]
+Description=Grok GUI TUI shell (tmux session)
+Documentation=man:grok-tui-shell(1)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=%h
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+# Detached TUI you can attach with: tmux attach -t grok-tui
+# Requires tmux. Headless Raspberry Pi: loginctl enable-linger $USER
+ExecStart=/bin/sh -c 'command -v tmux >/dev/null || { echo "tmux not found; install tmux or run grok-tui-shell status" >&2; exit 1; }; tmux has-session -t grok-tui 2>/dev/null || tmux new-session -d -s grok-tui -n tui grok-tui-shell'
+ExecStop=/bin/sh -c 'tmux kill-session -t grok-tui 2>/dev/null || true'
+
+[Install]
+WantedBy=default.target

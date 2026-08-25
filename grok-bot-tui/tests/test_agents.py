@@ -7,6 +7,7 @@ import httpx
 from grok_bot_tui.agents import AgentCatalog, normalize_list
 from grok_bot_tui.app import SessionState, handle_command, render_agent_list, render_signin
 from grok_bot_tui.auth import DEFAULT_AUTHORIZE_URL
+from grok_bot_tui.grok_bot_session import BOT_HOME_URL, BOT_ONBOARDING_URL
 
 
 def test_normalize_openai_style_models() -> None:
@@ -45,7 +46,10 @@ def test_signed_out_screen_has_osc8_and_raw_url() -> None:
     text = render_signin(state)
     assert "Grok GUI TUI shell" in text
     assert "signed out" in text
-    assert DEFAULT_AUTHORIZE_URL in text
+    assert DEFAULT_AUTHORIZE_URL == BOT_ONBOARDING_URL
+    assert BOT_ONBOARDING_URL in text
+    assert BOT_HOME_URL in text
+    assert "accounts.x.ai" not in text
     assert "\033]8;;" in text
     assert "Sign in with browser" in text
 
@@ -55,7 +59,7 @@ def test_empty_agents_and_nav() -> None:
     state.auth_state = "signed_in"
     state.view = "agents"
     empty = render_agent_list(state, terminal_width=80)
-    assert "No agents returned" in empty
+    assert "No bots in the Grok Bot cache" in empty
     from grok_bot_tui.agents import Agent
 
     state.agents = [
@@ -68,3 +72,8 @@ def test_empty_agents_and_nav() -> None:
     assert handle_command("/whoami", state).kind == "whoami"
     assert handle_command("/logout", state).kind == "logout"
     assert handle_command("/login", state).kind == "login"
+    listed = render_agent_list(state, terminal_width=80)
+    assert "2 from signed-in Grok Bot" in listed
+    assert any("Grok 4.6" in ln and "flagship" in ln for ln in listed.splitlines())
+    data_rows = [ln for ln in listed.splitlines() if "flagship" in ln or "prior" in ln]
+    assert len(data_rows) == 2

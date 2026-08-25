@@ -147,16 +147,17 @@ def test_chat_without_key() -> None:
     state = _state(has_api=False)
     result = handle_command("hello", state)
     assert result.kind == "login"
-    assert handle_command("/chat", state).kind == "need_key"
+    assert handle_command("/chat", state).kind == "login"
     assert handle_command("/login", state).kind == "login"
 
 
 def test_package_is_not_grok() -> None:
+    readme = (PKG / "README.md").read_text()
     blob = "\n".join(
         [
             HELP,
             build_parser().format_help(),
-            (PKG / "README.md").read_text(),
+            readme,
             (PKG / "src/grok_bot_tui/__init__.py").read_text(),
         ]
     )
@@ -164,6 +165,18 @@ def test_package_is_not_grok() -> None:
     assert "Grok GUI companion" not in blob
     assert "this is Grok" not in blob.lower()
     assert "https://grok.com" not in blob
+    assert "grok-tui-shell" in readme
+    assert "cursor.com/bot/onboarding" in readme
+    assert "sand-client-persistence" in readme
+    assert "from signed-in Grok Bot" in readme
+    assert "does **not** read Cookies" in readme
+    assert "does **not** call the official `grok` CLI" in readme
+    assert "Sales Outbound" in readme  # documented as stale-install symptom only
+    assert "0.4.0" in readme
+    assert "Raspberry Pi" in readme
+    assert "install.sh" in readme
+    assert "systemctl --user" in readme
+    assert "config.json" in readme
 
 
 def test_electron_packaging_untouched() -> None:
@@ -177,4 +190,7 @@ def test_no_official_grok_cli_module() -> None:
     assert not (PKG / "src/grok_bot_tui/grok.py").exists()
     source = (PKG / "src/grok_bot_tui/app.py").read_text()
     assert "Grok Build TUI" not in source
-    assert "find_grok_cli" in source  # official grok login --device-auth only
+    assert "find_grok_cli" not in source
+    assert "grok login" not in source
+    assert "accounts.x.ai" not in source
+    assert "start_device_login" not in source

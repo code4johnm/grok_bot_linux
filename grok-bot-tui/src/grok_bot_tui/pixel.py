@@ -43,11 +43,12 @@ def bitmap_from_seed(seed: str, width: int = SPRITE_W, height: int = SPRITE_H) -
         for x in range(width):
             on = bits[i % len(bits)]
             i += 1
-            # Keep a frame and two eye pixels so 8×8 stays readable.
-            if x in (0, width - 1) or y in (0, height - 1):
-                on = 1 if y == 0 or y == height - 1 else on
-            if y == height // 3 and x in (width // 3, (2 * width) // 3):
-                on = 1
+            # Frame + eyes only on full 8×8. Tiny inline sprites must stay mixed.
+            if width >= 8 and height >= 8:
+                if x in (0, width - 1) or y in (0, height - 1):
+                    on = 1 if y == 0 or y == height - 1 else on
+                if y == height // 3 and x in (width // 3, (2 * width) // 3):
+                    on = 1
             row.append(1 if on else 0)
         grid.append(row)
     return grid
@@ -104,3 +105,21 @@ def render_sprite(
 def sprite_column(seed: str, *, terminal_width: int = 80) -> list[str]:
     collapse = terminal_width < 48
     return render_sprite(seed, width=4 if collapse else None)
+
+
+def sprite_inline(seed: str, *, terminal_width: int = 80, truecolor: bool | None = None) -> str:
+    """One list-row icon. Full blocks only so adjacent bots do not bleed."""
+    rgb = palette_for(seed)
+    use_tc = _truecolor() if truecolor is None else truecolor
+    color = _fg(*rgb, use_tc)
+    if terminal_width < 48:
+        letter = (seed.strip() or "?")[0].upper()
+        return color + f"[{letter}]" + RESET
+    digest = _hash_bytes(seed + ":inline")
+    bits = [(digest[0] >> i) & 1 for i in range(4)]
+    if sum(bits) == 0:
+        bits[0] = 1
+    if sum(bits) == 4:
+        bits[3] = 0
+    cells = "".join("█" if bit else "░" for bit in bits)
+    return color + cells + RESET

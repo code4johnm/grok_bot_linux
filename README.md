@@ -23,7 +23,7 @@ sandbox rules stay on the matching script.
 | --- | --- | --- |
 | **Grok Bot desktop** | Official teammate / virtual-computer GUI from https://x.ai/bot | Community Linux port (no official vendor `.deb`) |
 | **Grok CLI** | Official native Linux agent / Grok Build | `curl -fsSL https://x.ai/cli/install.sh \| bash` |
-| **grok-bot-tui** | Terminal thread for the **grok-bot** app (not a Grok wrapper). `/gui` launches packaged grok-bot on x86_64; `/chat` is optional. TUI-only install works on aarch64. | `./scripts/install-tui.sh` or `pip install -e ./grok-bot-tui` — see [grok-bot-tui/README.md](grok-bot-tui/README.md) |
+| **grok-tui-shell** (`grok-bot-tui`) | Terminal shell for **Grok Bot** (the Electron GUI — not grok.com chat, not the `grok` CLI). `/login` uses the same Cursor SSO (Gmail) as grok-bot and lists **your** roster. `/gui` launches the desktop on x86_64. | `./scripts/install-tui.sh` or `pip install -e ./grok-bot-tui` — full guide: [grok-bot-tui/README.md](grok-bot-tui/README.md) |
 
 The desktop app is a GUI around the same ecosystem. It does **not** replace the
 CLI. Install both.
@@ -38,6 +38,26 @@ and supports Linux x86_64 and arm64.
 no working Grok Bot desktop tarball for arm64 at this time.
 
 Privacy: examples use `$HOME`, `/opt/grok-bot`, and `user@example.org` only.
+
+## Grok GUI TUI shell (`grok-tui-shell`)
+
+Companion TUI for the Grok Bot **desktop**, not a Grok wrapper. Detailed
+reference: [grok-bot-tui/README.md](grok-bot-tui/README.md).
+
+```bash
+./scripts/install-tui.sh
+export PATH="$HOME/.local/bin:$PATH"
+grok-tui-shell
+```
+
+`/login` launches grok-bot and prints `https://cursor.com/bot/onboarding`
+(OSC 8 + raw URL). Finish Gmail / Cursor SSO in the GUI. The TUI then lists
+bots from that signed-in roster (`Bots (N from signed-in Grok Bot)`). It does
+not read Cookies and does not call `grok login`. Header version must be
+**0.4.0** or newer (0.3.0 showed public templates instead of your bots).
+Raspberry Pi (ARM): `./grok-bot-tui/install.sh --yes --autostart` then
+`tmux attach -t grok-tui`. Electron grok-bot is x86_64-only; the TUI still
+runs. See [grok-bot-tui/README.md](grok-bot-tui/README.md).
 
 ## UBUNTU (copy-paste)
 

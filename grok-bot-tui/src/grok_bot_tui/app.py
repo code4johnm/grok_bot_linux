@@ -1,16 +1,25 @@
-"""Grok GUI TUI shell: sign-in, agent picker, one chat thread."""
+"""Grok GUI TUI shell: Grok Bot sign-in, bot picker, one chat thread."""
 
 from __future__ import annotations
 
+import os
 import shutil
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from prompt_toolkit import PromptSession
-from prompt_toolkit.patch_stdout import patch_stdout
+from prompt_toolkit.application import Application
+from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.filters import Condition
+from prompt_toolkit.formatted_text import ANSI
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.layout import HSplit, Layout, Window
+from prompt_toolkit.layout.controls import BufferControl, FormattedTextControl
+from prompt_toolkit.layout.processors import BeforeInput
+from prompt_toolkit.styles import Style
 
-from grok_bot_tui import PROG, TITLE, __version__
+from grok_bot_tui import TITLE, __version__
 from grok_bot_tui.agents import Agent, AgentCatalog
 from grok_bot_tui.auth import (
     CredentialStore,
@@ -19,31 +28,31 @@ from grok_bot_tui.auth import (
     open_browser,
     signin_url,
 )
-from grok_bot_tui.grok_session import (
-    find_grok_cli,
-    grok_logout,
-    load_cached_models,
-    load_identity,
-    parse_device_login_output,
-    start_device_login,
-)
 from grok_bot_tui.client import GrokAPIError, GrokClient
 from grok_bot_tui.config import Config, load_config
+from grok_bot_tui.grok_bot_session import (
+    BOT_HOME_URL,
+    last_selected_agent_id,
+    load_identity,
+    session_bots,
+    set_ignore_gui_session,
+    wait_for_gui_session,
+)
 from grok_bot_tui.gui import launch_grok_bot
-from grok_bot_tui.pixel import sprite_column
+from grok_bot_tui.pixel import sprite_inline
 from grok_bot_tui.usage import append_usage_line
 
 HELP = f"""{TITLE}
-Companion TUI for the Grok GUI. This is not Grok.
+Companion TUI for Grok Bot (the Electron GUI). This is not Grok.
 
-  /login          Grok Bot SSO (browser: Gmail/OIDC via grok login --device-auth)
+  /login          Same sign-in as Grok Bot: launch grok-bot + Cursor SSO (Gmail)
   /login-key      Optional API-key paste for api.x.ai chat only
-  /logout         Forget stored credentials
+  /logout         Sign this TUI out (Grok Bot desktop keeps its own session)
   /whoami         Show truncated account/key label
-  /agents         Refresh agent/model list
-  j / k  or ↑↓    Move selection (agent list)
-  Enter           Use selected agent for chat
-  <text>          Send chat to the active agent
+  /agents         Refresh bots from the signed-in Grok Bot roster
+  j / k  or ↑↓    Move selection (bot list)
+  Enter           Use selected bot
+  <text>          Send to the active bot (desktop) or api.x.ai if a key is set
   /gui            Launch packaged grok-bot desktop (x86_64)
   /clear          Clear the transcript
   /help           Show this help
@@ -67,6 +76,7 @@ class SessionState:
     last_usage: dict[str, int] | None = None
     total_input: int = 0
     total_output: int = 0
+    notice: str = ""
 
     def __post_init__(self) -> None:
         if not self.messages:
@@ -102,9 +112,9 @@ def render_header(state: SessionState) -> str:
 
 
 def render_footer(state: SessionState) -> str:
-    agent = state.active_agent.name if state.active_agent else "-"
+    bot = state.active_agent.name if state.active_agent else "-"
     auth = "signed in" if state.auth_state == "signed_in" else state.auth_state.replace("_", " ")
-    return f"agent:{agent} | {auth} | shell"
+    return f"bot:{bot} | {auth} | shell"
 
 
 def render_transcript(state: SessionState) -> str:
@@ -125,14 +135,12 @@ def render_signin(state: SessionState) -> str:
         TITLE,
         "signed out",
         "",
-        "Sign in the same way as Grok Bot: grok.com / accounts.x.ai SSO (Gmail, etc.).",
-        "Cookies are not scraped from the desktop app.",
+        "Companion for Grok Bot (the Electron GUI). This is not Grok.",
         *link.display_lines(),
+        BOT_HOME_URL,
         "",
-        "Enter or /login starts official grok login --device-auth.",
-        "Complete SSO in the browser, then return here.",
-        "",
-        TITLE,
+        "Enter or /login launches grok-bot for Cursor SSO.",
+        "j/k or arrows move the bot list after sign-in. /help for commands.",
     ]
     if state.auth_error:
         lines.insert(2, f"error: {state.auth_error}  (retry /login)")
@@ -141,22 +149,21 @@ def render_signin(state: SessionState) -> str:
 
 def render_agent_list(state: SessionState, *, terminal_width: int | None = None) -> str:
     width = terminal_width or shutil.get_terminal_size((80, 24)).columns
-    lines = [TITLE, "Agents / models", ""]
+    lines = [TITLE, f"Bots  ({len(state.agents)} from signed-in Grok Bot)", ""]
     if not state.agents:
-        lines.append("No agents returned. /agents to refresh.")
+        lines.append("No bots in the Grok Bot cache yet. Open grok-bot, then /agents.")
+        lines.append("")
         lines.append(render_footer(state))
         return "\n".join(lines)
+    name_w = 22
     for i, agent in enumerate(state.agents):
         mark = ">" if i == state.agent_index else " "
-        sprite = sprite_column(agent.seed, terminal_width=width)
-        ident = agent.id if len(agent.id) <= 28 else agent.id[:25] + "…"
-        blurb = agent.blurb if len(agent.blurb) <= 40 else agent.blurb[:37] + "…"
-        glyph = sprite[0] if sprite else ""
-        lines.append(f"{mark} {glyph}  {agent.name}")
-        for extra in sprite[1:]:
-            lines.append(f"    {extra}")
-        lines.append(f"    {blurb}  {ident}")
+        glyph = sprite_inline(agent.seed, terminal_width=width)
+        name = agent.name if len(agent.name) <= name_w else agent.name[: name_w - 1] + "…"
+        blurb = agent.blurb if len(agent.blurb) <= 36 else agent.blurb[:33] + "…"
+        lines.append(f"{mark} {glyph}  {name:<{name_w}} {blurb}")
     lines.append("")
+    lines.append("↑↓ / j k  select   Enter  use bot   /gui  desktop")
     lines.append(render_footer(state))
     return "\n".join(lines)
 
@@ -167,6 +174,21 @@ def render_screen(state: SessionState) -> str:
     if state.view == "agents":
         return render_agent_list(state)
     return f"{render_header(state)}\n{render_transcript(state)}\n{render_footer(state)}"
+
+
+def render_body(state: SessionState, *, terminal_width: int | None = None) -> str:
+    """Main pane without repeating the header/footer chrome."""
+    if state.auth_state != "signed_in":
+        lines = render_signin(state).splitlines()
+        return "\n".join(lines[1:] if lines[:1] == [TITLE] else lines)
+    if state.view == "agents":
+        lines = render_agent_list(state, terminal_width=terminal_width).splitlines()
+        if lines[:1] == [TITLE]:
+            lines = lines[1:]
+        if lines and lines[-1] == render_footer(state):
+            lines = lines[:-1]
+        return "\n".join(lines).rstrip()
+    return render_transcript(state)
 
 
 def handle_command(line: str, state: SessionState) -> CommandResult:
@@ -218,8 +240,8 @@ def handle_command(line: str, state: SessionState) -> CommandResult:
             return CommandResult("model", f"chat model set to {state.model}.")
         return CommandResult("model", f"chat model: {state.model}")
     if name == "/chat":
-        if state.auth_state != "signed_in" or not state.has_api:
-            return CommandResult("need_key", "signed out. /login or set XAI_API_KEY.")
+        if state.auth_state != "signed_in":
+            return CommandResult("login")
         state.view = "chat"
         if arg:
             return CommandResult("chat", send_text=arg)
@@ -227,33 +249,31 @@ def handle_command(line: str, state: SessionState) -> CommandResult:
     return CommandResult("unknown", f"Unknown command {cmd}. Try /help.")
 
 
-def _toolbar(state: SessionState) -> str:
-    return render_footer(state)
-
-
-def _fill_agents_from_cache(state: SessionState) -> None:
-    rows = load_cached_models()
-    if not rows:
-        return
+def _fill_session_bots(state: SessionState) -> None:
+    rows = session_bots()
     state.agents = [Agent(id=r["id"], name=r["name"], blurb=r["blurb"]) for r in rows]
     state.agent_index = 0
+    selected = last_selected_agent_id()
+    if selected:
+        for i, agent in enumerate(state.agents):
+            if agent.id == selected:
+                state.agent_index = i
+                break
     if state.agents:
-        state.model = state.agents[0].id
-        state.bot_name = state.agents[0].name
+        state.bot_name = state.agents[state.agent_index].name
 
 
-def _apply_sso(state: SessionState) -> str:
+def _apply_gui_session(state: SessionState, *, assumed: bool = False) -> str:
     ident = load_identity()
-    if ident is None or not ident.signed_in:
+    if not ident.signed_in and not assumed:
         state.auth_state = "error"
-        state.auth_error = "SSO did not complete"
-        return "error: SSO did not complete  (retry /login)"
-    state.has_api = True
+        state.auth_error = "Grok Bot GUI sign-in did not complete"
+        return "error: Grok Bot GUI sign-in did not complete  (retry /login)"
     state.auth_state = "signed_in"
-    state.auth_label = ident.label
+    state.auth_label = ident.label or "Grok Bot GUI session"
     state.auth_error = ""
     state.view = "agents"
-    _fill_agents_from_cache(state)
+    _fill_session_bots(state)
     return f"signed in as {state.auth_label}"
 
 
@@ -273,55 +293,40 @@ def _do_sso_login(
     state: SessionState,
     *,
     open_fn: Callable[[str], bool] | None = None,
+    gui_popen: Callable[..., object] | None = None,
+    gui_candidates: list[Path] | None = None,
+    gui_arch: str | None = None,
+    signed_in: Callable[[], bool] | None = None,
+    sleep: Callable[[float], None] | None = None,
+    timeout: float = 20.0,
+    emit: Callable[[str], None] | None = None,
 ) -> str:
+    log = emit or print
+    set_ignore_gui_session(False)
     ident = load_identity()
-    if ident is not None and ident.signed_in:
-        return _apply_sso(state)
+    if ident.signed_in:
+        return _apply_gui_session(state)
 
-    cli = find_grok_cli()
-    if cli is None:
-        url = signin_url()
-        link = SignInLink(url=url)
-        print("Official grok CLI not on PATH. Open SSO, then run: grok login --device-auth")
-        for line in link.display_lines():
-            print(line)
-        open_browser(url, opener=open_fn)
-        return "waiting for grok CLI SSO  (retry /login)"
-
+    url = signin_url()
+    link = SignInLink(url=url)
+    log("Complete sign-in in Grok Bot (same as the GUI: Gmail / Cursor SSO).")
+    log("Cookies are not scraped.")
+    for row in link.display_lines():
+        log(row)
+    log(BOT_HOME_URL)
+    open_browser(url, opener=open_fn)
+    log(
+        launch_grok_bot(
+            popen=gui_popen,
+            candidates=gui_candidates,
+            arch=gui_arch,
+        )
+    )
     state.auth_state = "waiting"
-    print("Complete sign-in in browser… (same SSO as Grok Bot: Gmail, etc.)")
-    try:
-        proc = start_device_login(cli)
-    except FileNotFoundError:
-        state.auth_state = "error"
-        state.auth_error = "grok CLI not found"
-        return "error: grok CLI not found  (retry /login)"
-    buf = ""
-    shown = False
-    try:
-        assert proc.stdout is not None
-        while True:
-            line = proc.stdout.readline()
-            if not line and proc.poll() is not None:
-                break
-            buf += line
-            prompt = parse_device_login_output(buf)
-            if prompt is not None and not shown:
-                shown = True
-                link = SignInLink(url=prompt.url)
-                for row in link.display_lines():
-                    print(row)
-                print(f"Confirm this code in the browser: {prompt.user_code}")
-                opened = open_browser(prompt.url, opener=open_fn)
-                if not opened:
-                    print("(could not open a browser; copy the raw URL)")
-        proc.wait(timeout=5)
-    except Exception:
-        try:
-            proc.kill()
-        except Exception:
-            pass
-    return _apply_sso(state)
+    if wait_for_gui_session(timeout=timeout, check=signed_in, sleep=sleep):
+        return _apply_gui_session(state, assumed=True)
+    state.auth_error = "waiting for Grok Bot GUI sign-in"
+    return "waiting for Grok Bot GUI sign-in  (retry /login after you finish SSO)"
 
 
 def _do_login_key(
@@ -333,7 +338,7 @@ def _do_login_key(
     if not pasted:
         url = signin_url(keys=True)
         link = SignInLink(url=url, label="Open API keys console")
-        print("API-key fallback only. Prefer /login for Grok Bot SSO.")
+        print("API-key fallback only. Prefer /login for Grok Bot GUI SSO.")
         for row in link.display_lines():
             print(row)
         return None, None, "paste the key, or /login-key <key>"
@@ -343,7 +348,49 @@ def _do_login_key(
         state.auth_state = "error"
         state.auth_error = "empty key"
         return None, None, "error: empty key  (retry /login-key)"
+    if not state.agents:
+        _fill_session_bots(state)
     return client, catalog, f"signed in as {state.auth_label}"
+
+
+def _init_state(
+    cfg: Config,
+    client: GrokClient | None,
+    catalog: AgentCatalog | None,
+    creds: CredentialStore,
+) -> tuple[SessionState, GrokClient | None, AgentCatalog | None]:
+    loaded = creds.load()
+    key = cfg.api_key or str(loaded.get("api_key") or "") or None
+    ident = load_identity()
+    signed = ident.signed_in or bool(key)
+    state = SessionState(
+        system=cfg.system,
+        model=cfg.model,
+        has_api=bool(key),
+        auth_label=(ident.label if ident.signed_in else str(loaded.get("label") or mask_secret(key))),
+    )
+    if ident.signed_in:
+        state.auth_state = "signed_in"
+        state.view = "agents"
+        _fill_session_bots(state)
+    if key and client is None:
+        client = GrokClient(api_key=key, model=cfg.model, timeout=cfg.timeout, base_url=cfg.base_url)
+    if key and catalog is None:
+        catalog = AgentCatalog(key, base_url=cfg.base_url, timeout=min(cfg.timeout, 30.0))
+    if ident.signed_in and not state.agents:
+        _fill_session_bots(state)
+    elif catalog is not None and not state.agents:
+        try:
+            catalog.refresh()
+            state.agents = list(catalog.cache)
+            if state.agents:
+                state.model = state.agents[0].id
+                state.bot_name = state.agents[0].name
+        except GrokAPIError as exc:
+            state.auth_error = str(exc)
+    elif signed and not state.agents:
+        _fill_session_bots(state)
+    return state, client, catalog
 
 
 def run_shell(
@@ -355,162 +402,267 @@ def run_shell(
     gui_arch: str | None = None,
     store: CredentialStore | None = None,
     catalog: AgentCatalog | None = None,
+    login_signed_in: Callable[[], bool] | None = None,
+    login_sleep: Callable[[float], None] | None = None,
+    login_timeout: float = 20.0,
 ) -> int:
     creds = store or CredentialStore()
-    loaded = creds.load()
-    key = cfg.api_key or str(loaded.get("api_key") or "") or None
-    ident = load_identity()
-    signed = bool(ident and ident.signed_in) or bool(key)
-    state = SessionState(
-        system=cfg.system,
-        model=cfg.model,
-        has_api=signed,
-        auth_label=(ident.label if ident and ident.signed_in else str(loaded.get("label") or mask_secret(key))),
-    )
-    if ident and ident.signed_in:
-        _fill_agents_from_cache(state)
-    if key and client is None:
-        client = GrokClient(api_key=key, model=cfg.model, timeout=cfg.timeout, base_url=cfg.base_url)
-    if key and catalog is None:
-        catalog = AgentCatalog(key, base_url=cfg.base_url, timeout=min(cfg.timeout, 30.0))
-    if catalog is not None and not state.agents:
-        try:
-            catalog.refresh()
-            state.agents = list(catalog.cache)
-            if state.agents:
-                state.model = state.agents[0].id
-                state.bot_name = state.agents[0].name
-        except GrokAPIError as exc:
-            state.auth_error = str(exc)
+    state, client, catalog = _init_state(cfg, client, catalog, creds)
 
-    session: PromptSession[str] = PromptSession(bottom_toolbar=lambda: _toolbar(state))
-    print(render_screen(state))
-    print(f"{TITLE} {__version__}. Companion shell — this is not Grok.")
-    with patch_stdout():
-        while True:
-            try:
-                line = session.prompt("compose> ")
-            except (KeyboardInterrupt, EOFError):
-                print()
-                return 0
+    holder: dict[str, object] = {"client": client, "catalog": catalog, "app": None}
 
-            result = handle_command(line, state)
-            if result.kind == "quit":
-                return 0
-            if result.kind == "empty":
-                continue
-            if result.kind == "login":
-                msg = _do_sso_login(state)
-                print(msg)
-                print(render_screen(state))
-                continue
-            if result.kind == "login_key":
-                new_client, new_catalog, msg = _do_login_key(state, creds, cfg, result.message)
-                if new_client is not None:
-                    if client is not None:
-                        client.close()
-                    client = new_client
-                if new_catalog is not None:
-                    if catalog is not None:
-                        catalog.close()
-                    catalog = new_catalog
-                    try:
-                        catalog.refresh()
-                        state.agents = list(catalog.cache)
-                    except GrokAPIError as exc:
-                        state.auth_error = str(exc)
-                        print(f"error: {exc}  (retry /login-key)")
-                print(msg)
-                print(render_screen(state))
-                continue
-            if result.kind == "logout":
-                grok_logout()
-                creds.clear()
-                state.has_api = False
-                state.auth_state = "signed_out"
-                state.auth_label = ""
-                state.agents = []
-                state.view = "sign_in"
+    def emit(msg: str) -> None:
+        state.notice = msg
+        app = holder.get("app")
+        if app is not None:
+            app.invalidate()  # type: ignore[union-attr]
+
+    def apply_line(line: str) -> bool:
+        """Dispatch one compose line. Return False to quit."""
+        nonlocal client, catalog
+        result = handle_command(line, state)
+        if result.kind == "quit":
+            return False
+        if result.kind == "empty":
+            if state.auth_state == "signed_in" and state.view == "agents":
+                result = CommandResult("agent_select")
+            else:
+                return True
+        if result.kind == "login":
+            emit("Launching grok-bot for Cursor SSO…")
+            msg = _do_sso_login(
+                state,
+                gui_popen=gui_popen,
+                gui_candidates=gui_candidates,
+                gui_arch=gui_arch,
+                signed_in=login_signed_in,
+                sleep=login_sleep,
+                timeout=login_timeout,
+                emit=emit,
+            )
+            emit(msg)
+            return True
+        if result.kind == "login_key":
+            new_client, new_catalog, msg = _do_login_key(state, creds, cfg, result.message)
+            if new_client is not None:
                 if client is not None:
                     client.close()
-                    client = None
+                client = new_client
+                holder["client"] = client
+            if new_catalog is not None:
                 if catalog is not None:
                     catalog.close()
-                    catalog = None
-                print("signed out")
-                print(render_screen(state))
-                continue
-            if result.kind == "whoami":
-                ident = load_identity()
-                if ident and ident.signed_in:
-                    print(f"signed in  {ident.label}")
-                elif state.auth_state == "signed_in":
-                    print(f"signed in  {state.auth_label or mask_secret(None)}")
-                else:
-                    print("signed out")
-                continue
-            if result.kind == "agents":
-                if catalog is None:
-                    print("signed out. /login first.")
-                    continue
-                try:
-                    catalog.refresh()
-                    state.agents = list(catalog.cache)
-                    state.view = "agents"
-                    print(render_agent_list(state))
-                except GrokAPIError as exc:
-                    print(f"error: {exc}  (retry /agents)")
-                continue
-            if result.kind == "agent_down":
-                if state.agents:
-                    state.agent_index = (state.agent_index + 1) % len(state.agents)
-                print(render_agent_list(state))
-                continue
-            if result.kind == "agent_up":
-                if state.agents:
-                    state.agent_index = (state.agent_index - 1) % len(state.agents)
-                print(render_agent_list(state))
-                continue
-            if result.kind == "agent_select":
-                agent = state.active_agent
-                if agent:
-                    state.model = agent.id
-                    state.bot_name = agent.name
-                    state.view = "chat"
-                    if client is not None:
-                        client.model = agent.id
-                    print(f"active agent: {agent.name}")
-                    print(render_screen(state))
-                continue
-            if result.kind == "gui":
-                print(
-                    launch_grok_bot(
-                        popen=gui_popen,
-                        candidates=gui_candidates,
-                        arch=gui_arch,
-                    )
+                catalog = new_catalog
+                holder["catalog"] = catalog
+                _fill_session_bots(state)
+                if not state.agents:
+                    try:
+                        catalog.refresh()
+                        api_agents = list(catalog.cache)
+                        if api_agents:
+                            state.agents = api_agents
+                    except GrokAPIError as exc:
+                        state.auth_error = str(exc)
+                        emit(f"error: {exc}  (retry /login-key)")
+            emit(msg)
+            return True
+        if result.kind == "logout":
+            set_ignore_gui_session(True)
+            creds.clear()
+            state.has_api = False
+            state.auth_state = "signed_out"
+            state.auth_label = ""
+            state.agents = []
+            state.view = "sign_in"
+            if client is not None:
+                client.close()
+                client = None
+                holder["client"] = None
+            if catalog is not None:
+                catalog.close()
+                catalog = None
+                holder["catalog"] = None
+            emit("signed out of this TUI. Sign out of Grok Bot in the desktop app to end that session.")
+            return True
+        if result.kind == "whoami":
+            ident = load_identity()
+            if ident.signed_in:
+                emit(f"signed in  {ident.label}")
+            elif state.auth_state == "signed_in":
+                emit(f"signed in  {state.auth_label or mask_secret(None)}")
+            else:
+                emit("signed out")
+            return True
+        if result.kind == "agents":
+            if state.auth_state != "signed_in":
+                emit("signed out. /login first.")
+                return True
+            _fill_session_bots(state)
+            state.view = "agents"
+            if not state.agents:
+                emit("No bots in the Grok Bot cache yet. Open grok-bot, then /agents.")
+            else:
+                emit("")
+            return True
+        if result.kind == "agent_down":
+            if state.agents:
+                state.agent_index = (state.agent_index + 1) % len(state.agents)
+            emit("")
+            return True
+        if result.kind == "agent_up":
+            if state.agents:
+                state.agent_index = (state.agent_index - 1) % len(state.agents)
+            emit("")
+            return True
+        if result.kind == "agent_select":
+            agent = state.active_agent
+            if agent:
+                state.bot_name = agent.name
+                state.view = "chat"
+                emit(f"active bot: {agent.name} — assign work in Grok Bot  {BOT_HOME_URL}")
+            return True
+        if result.kind == "gui":
+            emit(
+                launch_grok_bot(
+                    popen=gui_popen,
+                    candidates=gui_candidates,
+                    arch=gui_arch,
                 )
-                continue
-            if result.message:
-                print(result.message)
-            if result.send_text:
-                _send_chat(state, client, result.send_text)
-    return 0
+            )
+            return True
+        if result.kind == "help":
+            emit(result.message)
+            return True
+        if result.message:
+            emit(result.message)
+        if result.send_text:
+            _send_chat(
+                state,
+                client,
+                result.send_text,
+                gui_popen=gui_popen,
+                gui_candidates=gui_candidates,
+                gui_arch=gui_arch,
+                emit=emit,
+            )
+        return True
+
+    compose = Buffer()
+    kb = KeyBindings()
+    list_nav = Condition(
+        lambda: state.auth_state == "signed_in"
+        and state.view == "agents"
+        and not compose.text
+    )
+
+    @kb.add("c-c")
+    @kb.add("c-d")
+    @kb.add("c-q")
+    def _quit(event: object) -> None:
+        event.app.exit(result=0)  # type: ignore[attr-defined]
+
+    @kb.add("enter")
+    def _enter(event: object) -> None:
+        text = compose.text
+        compose.reset()
+        if not apply_line(text):
+            event.app.exit(result=0)  # type: ignore[attr-defined]
+        else:
+            event.app.invalidate()  # type: ignore[attr-defined]
+
+    @kb.add("up", filter=list_nav)
+    @kb.add("k", filter=list_nav)
+    def _up(event: object) -> None:
+        apply_line("k")
+        event.app.invalidate()  # type: ignore[attr-defined]
+
+    @kb.add("down", filter=list_nav)
+    @kb.add("j", filter=list_nav)
+    def _down(event: object) -> None:
+        apply_line("j")
+        event.app.invalidate()  # type: ignore[attr-defined]
+
+    def header_text() -> ANSI:
+        return ANSI(f"{TITLE}  {__version__}")
+
+    def body_text() -> ANSI:
+        width = shutil.get_terminal_size((80, 24)).columns
+        chunks: list[str] = []
+        if state.notice:
+            chunks.append(state.notice.rstrip())
+            chunks.append("")
+        chunks.append(render_body(state, terminal_width=width))
+        return ANSI("\n".join(chunks))
+
+    def footer_text() -> str:
+        return render_footer(state)
+
+    layout = Layout(
+        HSplit(
+            [
+                Window(FormattedTextControl(header_text), height=1, style="class:header"),
+                Window(FormattedTextControl(body_text), wrap_lines=True),
+                Window(height=1, char="─", style="class:rule"),
+                Window(
+                    BufferControl(
+                        buffer=compose,
+                        input_processors=[BeforeInput("compose> ", style="class:prompt")],
+                    ),
+                    height=1,
+                    style="class:compose",
+                ),
+                Window(FormattedTextControl(footer_text), height=1, style="class:footer"),
+            ]
+        )
+    )
+    style = Style.from_dict(
+        {
+            "header": "bold reverse",
+            "footer": "reverse",
+            "rule": "ansibrightblack",
+            "prompt": "bold ansicyan",
+        }
+    )
+    app: Application[int] = Application(
+        layout=layout,
+        key_bindings=kb,
+        full_screen=True,
+        mouse_support=False,
+        style=style,
+    )
+    holder["app"] = app
+    try:
+        result = app.run()
+    except (KeyboardInterrupt, EOFError):
+        return 0
+    return int(result or 0)
 
 
-def _send_chat(state: SessionState, client: GrokClient | None, text: str) -> None:
+def _send_chat(
+    state: SessionState,
+    client: GrokClient | None,
+    text: str,
+    *,
+    gui_popen: Callable[..., object] | None = None,
+    gui_candidates: list[Path] | None = None,
+    gui_arch: str | None = None,
+    emit: Callable[[str], None] | None = None,
+) -> None:
+    log = emit or print
     if client is None:
-        print("signed out. /login or set XAI_API_KEY.")
+        state.messages.append({"role": "user", "content": text})
+        launched = launch_grok_bot(
+            popen=gui_popen,
+            candidates=gui_candidates,
+            arch=gui_arch,
+        )
+        log(f"{launched}  Messages to Bots run in Grok Bot.  {BOT_HOME_URL}")
         return
     state.messages.append({"role": "user", "content": text})
-    print(f"you: {text}")
-    print("bot: ", end="", flush=True)
     try:
         parts: list[str] = []
         for token in client.stream_text(state.messages):
             parts.append(token)
-            print(token, end="", flush=True)
-        print()
         reply = "".join(parts)
         if reply:
             state.messages.append({"role": "assistant", "content": reply})
@@ -519,14 +671,26 @@ def _send_chat(state: SessionState, client: GrokClient | None, text: str) -> Non
             state.total_input += client.last_usage["input_tokens"]
             state.total_output += client.last_usage["output_tokens"]
             append_usage_line(client.last_usage, session=state.bot_name, model=state.model)
+        log("")
     except GrokAPIError as exc:
-        print()
-        print(f"error: {exc}")
+        log(f"error: {exc}")
         state.messages.pop()
 
 
 def main(argv: list[str] | None = None) -> int:
     cfg = load_config(argv)
+    if cfg.command != "tui":
+        from grok_bot_tui.cli import run_cli
+
+        return run_cli(cfg)
+    if not sys.stdin.isatty() and os.environ.get("GROK_TUI_ALLOW_NOTTY", "").strip() != "1":
+        print(
+            "error: no TTY. Use grok-tui-shell version|whoami|bots|status, "
+            "or run inside a terminal / tmux (Raspberry Pi autostart).",
+            file=sys.stderr,
+        )
+        print("This is not Grok.", file=sys.stderr)
+        return 2
     store = CredentialStore()
     loaded = store.load()
     key = cfg.api_key or str(loaded.get("api_key") or "") or None

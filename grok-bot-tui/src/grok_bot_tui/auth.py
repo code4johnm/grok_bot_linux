@@ -1,4 +1,4 @@
-"""Links, optional API-key file store. Grok Bot SSO lives in grok_session.py."""
+"""Links, optional API-key file store. Grok Bot GUI SSO lives in grok_bot_session."""
 
 from __future__ import annotations
 
@@ -12,10 +12,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
-# Official console (no public third-party OAuth client for companion apps).
+from grok_bot_tui.grok_bot_session import BOT_ONBOARDING_URL
+
+# Official console (API-key fallback only — not Grok Bot SSO).
 CONSOLE_LOGIN_URL = "https://console.x.ai/login"
 CONSOLE_KEYS_URL = "https://console.x.ai/team/default/api-keys"
-DEFAULT_AUTHORIZE_URL = "https://accounts.x.ai/sign-in"
+# Same onboarding URL the grok-bot Electron app uses (Cursor SSO / Gmail).
+DEFAULT_AUTHORIZE_URL = BOT_ONBOARDING_URL
 
 
 @dataclass(frozen=True)
@@ -34,7 +37,7 @@ class SignInLink:
 
 
 def signin_url(*, keys: bool = False) -> str:
-    """SSO sign-in (Grok Bot / grok CLI). keys=True is the API-key console only."""
+    """Grok Bot GUI onboarding (Cursor SSO). keys=True is the API-key console only."""
     override = os.environ.get("GROK_TUI_SIGNIN_URL", "").strip()
     if override:
         return override
@@ -50,10 +53,9 @@ def build_authorize_url(
     state: str,
     authorize_endpoint: str | None = None,
 ) -> str:
-    """OAuth authorize URL builder for when xAI ships a public client.
+    """OAuth authorize URL builder for a future public client.
 
-    Not used by the default login path (API key paste). Kept so a real
-    device/OAuth flow can plug in without changing the TUI chrome.
+    Default /login launches grok-bot and OSC 8 to Cursor onboarding.
     """
     base = (
         authorize_endpoint

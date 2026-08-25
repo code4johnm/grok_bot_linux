@@ -21,7 +21,7 @@ from grok_bot_tui.auth import (
 def test_signin_url_is_official_sso() -> None:
     url = signin_url()
     assert url == DEFAULT_AUTHORIZE_URL
-    assert url.startswith("https://accounts.x.ai/")
+    assert url.startswith("https://cursor.com/bot/onboarding")
     assert signin_url(keys=True) == CONSOLE_KEYS_URL
 
 
