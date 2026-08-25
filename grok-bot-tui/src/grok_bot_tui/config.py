@@ -61,8 +61,8 @@ def build_parser() -> argparse.ArgumentParser:
             "needs XAI_API_KEY or GROK_API_KEY."
         ),
         epilog=(
-            "Commands: /gui /help /clear /notes /chat /prompt /analyze "
-            "/model /sessions /new /open /forget /quit"
+            "Commands: /gui /help /clear /notes /chat /plan /send /cancel "
+            "/prompt /analyze /model /sessions /new /open /forget /quit"
         ),
     )
     parser.add_argument(

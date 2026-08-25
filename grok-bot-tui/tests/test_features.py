@@ -8,17 +8,17 @@ from pathlib import Path
 import httpx
 import pytest
 
-from grok_bot_tui.app import SessionState, analyze_request, handle_command
+from grok_bot_tui.app import SessionState, _toolbar, analyze_request, handle_command
 from grok_bot_tui.client import GrokClient
 from grok_bot_tui.config import DEFAULT_MODEL, build_parser
 from grok_bot_tui.prompts import CATALOG, NOTICE, PromptCatalog, PromptError
 from grok_bot_tui.sessions import SessionStore
-from grok_bot_tui.usage import append_usage_line, format_meter, parse_usage
+from grok_bot_tui.usage import append_audit_line, append_usage_line, format_meter, parse_usage
 
 
 def test_help_lists_new_commands() -> None:
     text = build_parser().format_help()
-    for name in ("/prompt", "/analyze", "/sessions", "/model", "/gui"):
+    for name in ("/prompt", "/analyze", "/sessions", "/model", "/gui", "/plan", "/send"):
         assert name in text
 
 
@@ -109,7 +109,8 @@ def test_sessions_new_open_forget(tmp_path: Path) -> None:
     assert forgot.kind == "forget"
     assert "demo" not in store.list_names()
     assert handle_command("/clear", state).kind == "clear"
-    assert store.path_for("other").is_file()
+    assert store.state_path("other").is_file()
+    assert store.path_for("other").is_dir()
 
 
 def test_session_file_has_no_secrets(tmp_path: Path) -> None:
@@ -124,9 +125,11 @@ def test_session_file_has_no_secrets(tmp_path: Path) -> None:
             "Authorization": "Bearer secret",
         }
     )
-    raw = store.path_for("safe").read_text(encoding="utf-8")
-    assert "should-not-be-saved" not in raw
-    assert "Bearer" not in raw
+    raw = store.state_path("safe").read_text(encoding="utf-8")
+    notes = (store.path_for("safe") / "notes.txt").read_text(encoding="utf-8")
+    blob = raw + notes
+    assert "should-not-be-saved" not in blob
+    assert "Bearer" not in blob
     loaded = store.load("safe")
     assert loaded is not None
     assert "api_key" not in loaded
@@ -185,6 +188,81 @@ def test_usage_jsonl_append(tmp_path: Path) -> None:
     assert row["output_tokens"] == 5
     assert row["session"] == "default"
     assert "api_key" not in row
+
+
+def test_plan_hold_and_yn() -> None:
+    state = SessionState(system="sys", model="grok-4.6", has_api=True)
+    held = handle_command("/plan draft this turn", state)
+    assert held.send_text is None
+    assert state.pending_plan == "draft this turn"
+    assert "held" in held.message.lower()
+    assert "pending plan · y/n" in _toolbar(state)
+    blocked = handle_command("oops", state)
+    assert blocked is not None and blocked.send_text is None
+    assert state.pending_plan == "draft this turn"
+    approved = handle_command("y", state)
+    assert approved.kind == "plan_send"
+    assert approved.send_text == "draft this turn"
+    assert state.pending_plan is None
+    assert state.plans_approved == 1
+
+
+def test_plan_n_and_aliases() -> None:
+    state = SessionState(system="sys", model="grok-4.6", has_api=True)
+    handle_command("/plan later", state)
+    cancelled = handle_command("n", state)
+    assert cancelled.kind == "plan_cancel"
+    assert cancelled.send_text is None
+    assert state.pending_plan is None
+    assert state.plans_cancelled == 1
+    handle_command("/plan again", state)
+    assert handle_command("/reject", state).kind == "plan_cancel"
+    handle_command("/plan third", state)
+    assert handle_command("/approve", state).send_text == "third"
+    assert handle_command("/send", state).message == "No pending plan."
+
+
+def test_chat_stays_immediate_while_plan_is_separate() -> None:
+    state = SessionState(system="sys", model="grok-4.6", has_api=True)
+    handle_command("/plan wait", state)
+    chat = handle_command("/chat now", state)
+    assert chat.send_text == "now"
+    assert state.pending_plan is None
+
+
+def test_persist_across_restart(tmp_path: Path) -> None:
+    store = SessionStore(tmp_path / "sessions")
+    state = SessionState(system="sys", model="grok-4.6", has_api=True)
+    state.notes.append("durable-note")
+    state.prompt_id = "grok4"
+    state.total_input = 12
+    state.total_output = 3
+    state.pending_plan = "held across quit"
+    store.save(state.snapshot())
+    assert store.current_name() == "default"
+    assert (tmp_path / "sessions" / "default").is_dir()
+
+    restarted = SessionState(system="fresh", model="other", has_api=True)
+    loaded = store.load(store.current_name() or "")
+    assert loaded is not None
+    restarted.load_snapshot(loaded)
+    assert restarted.notes == ["durable-note"]
+    assert restarted.model == "grok-4.6"
+    assert restarted.prompt_id == "grok4"
+    assert restarted.total_input == 12
+    assert restarted.total_output == 3
+    assert restarted.pending_plan == "held across quit"
+
+
+def test_audit_plan_events(tmp_path: Path) -> None:
+    path = tmp_path / "usage.jsonl"
+    append_audit_line("plan-approved", session="default", path=path)
+    append_audit_line("plan-cancelled", session="default", path=path)
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    assert rows[0]["event"] == "plan-approved"
+    assert rows[1]["event"] == "plan-cancelled"
+    assert "hours" not in rows[0]
+    assert "input_tokens" not in rows[0]
 
 
 def test_model_switch() -> None:

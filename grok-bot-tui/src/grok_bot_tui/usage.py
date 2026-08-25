@@ -47,6 +47,24 @@ def append_usage_line(
         handle.write(json.dumps(line) + "\n")
 
 
+def append_audit_line(
+    event: str,
+    *,
+    session: str,
+    path: Path | None = None,
+) -> None:
+    """Record plan-approved / plan-cancelled. Omit any number that is missing."""
+    dest = path if path is not None else data_dir() / "usage.jsonl"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    line = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "session": session,
+        "event": event,
+    }
+    with dest.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(line) + "\n")
+
+
 def format_meter(last: dict[str, int] | None, total_in: int, total_out: int) -> str:
     if last is None and total_in == 0 and total_out == 0:
         return ""

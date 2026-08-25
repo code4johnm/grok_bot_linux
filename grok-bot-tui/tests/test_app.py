@@ -98,6 +98,8 @@ def test_commands_gui_clear_quit_help_notes() -> None:
     assert "/analyze" in help_result.message
     assert "/sessions" in help_result.message
     assert "/model" in help_result.message
+    assert "/plan" in help_result.message
+    assert "/send" in help_result.message
     assert TITLE in help_result.message
     assert PANE_API in help_result.message
     assert handle_command("/notes", state).kind == "notes"
