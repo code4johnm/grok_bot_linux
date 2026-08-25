@@ -6,7 +6,7 @@ import httpx
 
 from grok_bot_tui.agents import AgentCatalog, normalize_list
 from grok_bot_tui.app import SessionState, handle_command, render_agent_list, render_signin
-from grok_bot_tui.auth import CONSOLE_KEYS_URL
+from grok_bot_tui.auth import DEFAULT_AUTHORIZE_URL
 
 
 def test_normalize_openai_style_models() -> None:
@@ -45,7 +45,7 @@ def test_signed_out_screen_has_osc8_and_raw_url() -> None:
     text = render_signin(state)
     assert "Grok GUI TUI shell" in text
     assert "signed out" in text
-    assert CONSOLE_KEYS_URL in text
+    assert DEFAULT_AUTHORIZE_URL in text
     assert "\033]8;;" in text
     assert "Sign in with browser" in text
 

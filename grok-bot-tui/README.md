@@ -3,44 +3,37 @@
 Companion terminal client for the Grok GUI. **This is not Grok** and is not a
 rebrand of Grok Bot. Footer/title: `Grok GUI TUI shell`.
 
-## Sign-in (honest MVP)
+## Sign-in (same as Grok Bot)
 
-True “click link → authorize app → TUI signed in” needs an **official**
-OAuth or device-code flow. xAI’s public API today is **API keys** from the
-console ([docs.x.ai quickstart](https://docs.x.ai/developers/quickstart)).
-This shell does **not** scrape cookies or pretend to be an OAuth client.
-
-Easy sign-on:
+Grok Bot and the official `grok` CLI sign in with **OIDC at
+`https://accounts.x.ai`** (SSO such as Gmail). That is the TUI path too.
 
 1. Unsigned view: OSC 8 **Sign in with browser** plus the raw URL
-   (`https://console.x.ai/team/default/api-keys`). Terminals without OSC 8
-   still get the URL.
-2. Enter or `/login` opens that page (`webbrowser.open`).
-3. Paste the key **once** at `compose>` (or `/login <key>`).
-4. `XAI_API_KEY` / `GROK_API_KEY` still work non-interactively.
+   `https://accounts.x.ai/sign-in`.
+2. `/login` or Enter runs official `grok login --device-auth`.
+3. The TUI prints a clickable
+   `https://accounts.x.ai/oauth2/device?user_code=…` link and the code.
+4. Finish SSO in the browser. The CLI writes `$HOME/.grok/auth.json`.
+5. `/whoami` shows a truncated name/email, never the token.
+6. `/logout` runs `grok logout`.
 
-Credentials: keyring when available, else
-`$HOME/.config/grok-tui-shell/credentials` mode `0600`. Never printed in full.
-`/whoami` shows a truncated label. `/logout` clears the store.
+If you are already signed into `grok` / Grok Bot, the TUI reuses that session.
+It does **not** read Electron cookies under `$HOME/.config/Grok Bot`.
 
-`auth.build_authorize_url` exists only as a hook if xAI later publishes a
-public OAuth client. It is not the default path.
-
-Pixel “bots” in the terminal are hash-based half-block sprites and work
-whether you signed in via paste or env.
+`/login-key` is an optional **API-key** fallback for `api.x.ai` chat only
+(`XAI_API_KEY`). That is not Grok Bot SSO.
 
 ## Agents / models
 
-After sign-in, **Agents / models** lists `GET /v1/models` (official list; custom
-bots are shown as models if that is all the API returns). Each row has a
-pixelated half-block sprite (`▀▄█`) from a hash of the id, plus name, blurb,
-and truncated id.
+After SSO, the pane **Agents / models** lists models from the grok CLI cache
+(`$HOME/.grok/models_cache.json`) or `GET /v1/models` if an API key is set.
+Each row has a pixelated half-block sprite (`▀▄█`) from a hash of the id.
 
-- `j` / `k` move the selection; Enter binds chat to that agent.
-- `/agents` refreshes. Narrow terminals collapse the sprite to `[A]`.
-- Truecolor when `COLORTERM` says so; otherwise 16-color. No Kitty/Sixel in v1.
+- `j` / `k` move; Enter binds chat.
+- `/agents` refreshes. Narrow terminals collapse to `[A]`.
+- No Kitty/Sixel in v1.
 
-Status line: `agent:<name> | signed in | shell`.
+Status: `agent:<name> | signed in | shell`.
 
 ## Install
 
@@ -48,36 +41,36 @@ Status line: `agent:<name> | signed in | shell`.
 pip install -e "./grok-bot-tui[dev]"
 pytest grok-bot-tui/tests
 grok-tui-shell
-# or: grok-bot-tui
 ```
+
+Requires the official grok CLI on PATH for SSO (`curl -fsSL https://x.ai/cli/install.sh | bash`).
 
 ## Commands
 
 | Input | Action |
 | --- | --- |
-| `/login` | Browser link + paste key |
+| `/login` | Grok Bot SSO (device URL + browser) |
+| `/login-key` | Optional API-key paste |
 | `/logout` `/whoami` | Sign out / truncated label |
 | `/agents` | Refresh list |
-| `j` `k` Enter | Navigate / select agent |
-| text `/chat` | Send to active agent |
+| `j` `k` Enter | Navigate / select |
 | `/gui` | Packaged grok-bot desktop (x86_64) |
 | `/help` `/quit` | Help / exit |
 
-## Demo walkthrough
+## Demo
 
 ```text
 Grok GUI TUI shell
 signed out
-Sign in with browser          ← OSC 8 (also printed as raw URL)
-https://console.x.ai/team/default/api-keys
-Press Enter to open the browser, then paste the key, or /login
+Sign in with browser
+https://accounts.x.ai/sign-in
 compose> /login
-Open the official console, create a key, paste it once.
-compose> xai-…                ← paste once (never logged in full)
-signed in as xai-…abcd
+Complete sign-in in browser… (same SSO as Grok Bot: Gmail, etc.)
+https://accounts.x.ai/oauth2/device?user_code=ABCD-1234
+Confirm this code in the browser: ABCD-1234
+signed in as Operator (u***@example.org)
 Agents / models
-> ██▀▄…  grok-4.6
-    flagship  grok-4.6
-agent:grok-4.6 | signed in | shell
-compose>
+> ██▀▄  Grok 4.6
+    SpaceXAI's latest frontier model  grok-4.6
+agent:Grok 4.6 | signed in | shell
 ```

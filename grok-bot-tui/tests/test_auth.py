@@ -9,6 +9,7 @@ import pytest
 
 from grok_bot_tui.auth import (
     CONSOLE_KEYS_URL,
+    DEFAULT_AUTHORIZE_URL,
     CredentialStore,
     SignInLink,
     build_authorize_url,
@@ -17,21 +18,22 @@ from grok_bot_tui.auth import (
 )
 
 
-def test_signin_url_is_official_console() -> None:
+def test_signin_url_is_official_sso() -> None:
     url = signin_url()
-    assert url == CONSOLE_KEYS_URL
-    assert url.startswith("https://console.x.ai/")
+    assert url == DEFAULT_AUTHORIZE_URL
+    assert url.startswith("https://accounts.x.ai/")
+    assert signin_url(keys=True) == CONSOLE_KEYS_URL
 
 
 def test_osc8_and_raw_url() -> None:
-    link = SignInLink(url=CONSOLE_KEYS_URL)
+    link = SignInLink(url=DEFAULT_AUTHORIZE_URL)
     osc = link.osc8()
-    assert CONSOLE_KEYS_URL in osc
+    assert DEFAULT_AUTHORIZE_URL in osc
     assert "\033]8;;" in osc
     assert "Sign in with browser" in osc
     lines = link.display_lines()
     assert lines[0] == osc
-    assert lines[1] == CONSOLE_KEYS_URL
+    assert lines[1] == DEFAULT_AUTHORIZE_URL
 
 
 def test_build_authorize_url() -> None:

@@ -1,8 +1,4 @@
-"""Sign-in: OSC 8 console link + one-time API key paste. No cookie scraping.
-
-True click-to-authorize needs an official xAI OAuth/device flow. Until that
-exists, easy sign-on is: open the console, paste a key once, store it at 0600.
-"""
+"""Links, optional API-key file store. Grok Bot SSO lives in grok_session.py."""
 
 from __future__ import annotations
 
@@ -37,12 +33,14 @@ class SignInLink:
         ]
 
 
-def signin_url(*, keys: bool = True) -> str:
-    """Official page to create/copy an API key (docs.x.ai quickstart)."""
+def signin_url(*, keys: bool = False) -> str:
+    """SSO sign-in (Grok Bot / grok CLI). keys=True is the API-key console only."""
     override = os.environ.get("GROK_TUI_SIGNIN_URL", "").strip()
     if override:
         return override
-    return CONSOLE_KEYS_URL if keys else CONSOLE_LOGIN_URL
+    if keys:
+        return CONSOLE_KEYS_URL
+    return DEFAULT_AUTHORIZE_URL
 
 
 def build_authorize_url(

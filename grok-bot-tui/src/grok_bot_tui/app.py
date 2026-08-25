@@ -19,6 +19,14 @@ from grok_bot_tui.auth import (
     open_browser,
     signin_url,
 )
+from grok_bot_tui.grok_session import (
+    find_grok_cli,
+    grok_logout,
+    load_cached_models,
+    load_identity,
+    parse_device_login_output,
+    start_device_login,
+)
 from grok_bot_tui.client import GrokAPIError, GrokClient
 from grok_bot_tui.config import Config, load_config
 from grok_bot_tui.gui import launch_grok_bot
@@ -28,7 +36,8 @@ from grok_bot_tui.usage import append_usage_line
 HELP = f"""{TITLE}
 Companion TUI for the Grok GUI. This is not Grok.
 
-  /login          Open console link; paste API key once (or XAI_API_KEY)
+  /login          Grok Bot SSO (browser: Gmail/OIDC via grok login --device-auth)
+  /login-key      Optional API-key paste for api.x.ai chat only
   /logout         Forget stored credentials
   /whoami         Show truncated account/key label
   /agents         Refresh agent/model list
@@ -116,11 +125,12 @@ def render_signin(state: SessionState) -> str:
         TITLE,
         "signed out",
         "",
-        "Easy sign-on: open the official console, paste an API key once.",
-        "No OAuth device flow is published for third-party apps; cookies are not scraped.",
+        "Sign in the same way as Grok Bot: grok.com / accounts.x.ai SSO (Gmail, etc.).",
+        "Cookies are not scraped from the desktop app.",
         *link.display_lines(),
         "",
-        "Enter or /login opens the browser. Then paste the key at compose.",
+        "Enter or /login starts official grok login --device-auth.",
+        "Complete SSO in the browser, then return here.",
         "",
         TITLE,
     ]
@@ -167,9 +177,9 @@ def handle_command(line: str, state: SessionState) -> CommandResult:
         return CommandResult("empty")
 
     if not text.startswith("/"):
-        if state.auth_state != "signed_in" or not state.has_api:
-            if len(text) >= 8:
-                return CommandResult("login", text)
+        if state.auth_state != "signed_in":
+            if text.lower().startswith("xai-") or (len(text) > 24 and " " not in text):
+                return CommandResult("login_key", text)
             return CommandResult("login")
         if state.view == "agents":
             if text in ("j", "n"):
@@ -194,6 +204,8 @@ def handle_command(line: str, state: SessionState) -> CommandResult:
         return CommandResult("clear", "Transcript cleared.")
     if name == "/login":
         return CommandResult("login", arg)
+    if name == "/login-key":
+        return CommandResult("login_key", arg)
     if name == "/logout":
         return CommandResult("logout")
     if name == "/whoami":
@@ -219,6 +231,32 @@ def _toolbar(state: SessionState) -> str:
     return render_footer(state)
 
 
+def _fill_agents_from_cache(state: SessionState) -> None:
+    rows = load_cached_models()
+    if not rows:
+        return
+    state.agents = [Agent(id=r["id"], name=r["name"], blurb=r["blurb"]) for r in rows]
+    state.agent_index = 0
+    if state.agents:
+        state.model = state.agents[0].id
+        state.bot_name = state.agents[0].name
+
+
+def _apply_sso(state: SessionState) -> str:
+    ident = load_identity()
+    if ident is None or not ident.signed_in:
+        state.auth_state = "error"
+        state.auth_error = "SSO did not complete"
+        return "error: SSO did not complete  (retry /login)"
+    state.has_api = True
+    state.auth_state = "signed_in"
+    state.auth_label = ident.label
+    state.auth_error = ""
+    state.view = "agents"
+    _fill_agents_from_cache(state)
+    return f"signed in as {state.auth_label}"
+
+
 def _apply_key(state: SessionState, store: CredentialStore, key: str, cfg: Config) -> tuple[GrokClient, AgentCatalog]:
     store.save(key)
     state.has_api = True
@@ -231,34 +269,81 @@ def _apply_key(state: SessionState, store: CredentialStore, key: str, cfg: Confi
     return client, catalog
 
 
-def _do_login(
+def _do_sso_login(
+    state: SessionState,
+    *,
+    open_fn: Callable[[str], bool] | None = None,
+) -> str:
+    ident = load_identity()
+    if ident is not None and ident.signed_in:
+        return _apply_sso(state)
+
+    cli = find_grok_cli()
+    if cli is None:
+        url = signin_url()
+        link = SignInLink(url=url)
+        print("Official grok CLI not on PATH. Open SSO, then run: grok login --device-auth")
+        for line in link.display_lines():
+            print(line)
+        open_browser(url, opener=open_fn)
+        return "waiting for grok CLI SSO  (retry /login)"
+
+    state.auth_state = "waiting"
+    print("Complete sign-in in browser… (same SSO as Grok Bot: Gmail, etc.)")
+    try:
+        proc = start_device_login(cli)
+    except FileNotFoundError:
+        state.auth_state = "error"
+        state.auth_error = "grok CLI not found"
+        return "error: grok CLI not found  (retry /login)"
+    buf = ""
+    shown = False
+    try:
+        assert proc.stdout is not None
+        while True:
+            line = proc.stdout.readline()
+            if not line and proc.poll() is not None:
+                break
+            buf += line
+            prompt = parse_device_login_output(buf)
+            if prompt is not None and not shown:
+                shown = True
+                link = SignInLink(url=prompt.url)
+                for row in link.display_lines():
+                    print(row)
+                print(f"Confirm this code in the browser: {prompt.user_code}")
+                opened = open_browser(prompt.url, opener=open_fn)
+                if not opened:
+                    print("(could not open a browser; copy the raw URL)")
+        proc.wait(timeout=5)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
+    return _apply_sso(state)
+
+
+def _do_login_key(
     state: SessionState,
     store: CredentialStore,
     cfg: Config,
-    *,
-    pasted: str = "",
-    open_fn: Callable[[str], bool] | None = None,
+    pasted: str,
 ) -> tuple[GrokClient | None, AgentCatalog | None, str]:
-    if pasted:
-        try:
-            client, catalog = _apply_key(state, store, pasted, cfg)
-        except ValueError:
-            state.auth_state = "error"
-            state.auth_error = "empty key"
-            return None, None, "error: empty key  (retry /login)"
-        return client, catalog, f"signed in as {state.auth_label}"
-
-    url = signin_url()
-    link = SignInLink(url=url)
-    state.auth_state = "waiting"
-    print("Open the official console, create a key, paste it once.")
-    for line in link.display_lines():
-        print(line)
-    opened = open_browser(url, opener=open_fn)
-    if not opened:
-        print("(could not open a browser; copy the raw URL above)")
-    state.auth_state = "signed_out"
-    return None, None, "waiting for key — paste it at compose, or /login <key>"
+    if not pasted:
+        url = signin_url(keys=True)
+        link = SignInLink(url=url, label="Open API keys console")
+        print("API-key fallback only. Prefer /login for Grok Bot SSO.")
+        for row in link.display_lines():
+            print(row)
+        return None, None, "paste the key, or /login-key <key>"
+    try:
+        client, catalog = _apply_key(state, store, pasted, cfg)
+    except ValueError:
+        state.auth_state = "error"
+        state.auth_error = "empty key"
+        return None, None, "error: empty key  (retry /login-key)"
+    return client, catalog, f"signed in as {state.auth_label}"
 
 
 def run_shell(
@@ -273,19 +358,22 @@ def run_shell(
 ) -> int:
     creds = store or CredentialStore()
     loaded = creds.load()
-    has_api = cfg.has_api_key or bool(loaded.get("api_key"))
     key = cfg.api_key or str(loaded.get("api_key") or "") or None
+    ident = load_identity()
+    signed = bool(ident and ident.signed_in) or bool(key)
     state = SessionState(
         system=cfg.system,
         model=cfg.model,
-        has_api=bool(has_api and key),
-        auth_label=str(loaded.get("label") or mask_secret(key)),
+        has_api=signed,
+        auth_label=(ident.label if ident and ident.signed_in else str(loaded.get("label") or mask_secret(key))),
     )
+    if ident and ident.signed_in:
+        _fill_agents_from_cache(state)
     if key and client is None:
         client = GrokClient(api_key=key, model=cfg.model, timeout=cfg.timeout, base_url=cfg.base_url)
     if key and catalog is None:
         catalog = AgentCatalog(key, base_url=cfg.base_url, timeout=min(cfg.timeout, 30.0))
-    if state.has_api and catalog is not None:
+    if catalog is not None and not state.agents:
         try:
             catalog.refresh()
             state.agents = list(catalog.cache)
@@ -312,11 +400,12 @@ def run_shell(
             if result.kind == "empty":
                 continue
             if result.kind == "login":
-                pasted = result.message if result.message.startswith("xai-") or len(result.message) > 12 else ""
-                if result.message and not pasted and result.message not in ("",):
-                    # /login <key>
-                    pasted = result.message
-                new_client, new_catalog, msg = _do_login(state, creds, cfg, pasted=pasted)
+                msg = _do_sso_login(state)
+                print(msg)
+                print(render_screen(state))
+                continue
+            if result.kind == "login_key":
+                new_client, new_catalog, msg = _do_login_key(state, creds, cfg, result.message)
                 if new_client is not None:
                     if client is not None:
                         client.close()
@@ -330,11 +419,12 @@ def run_shell(
                         state.agents = list(catalog.cache)
                     except GrokAPIError as exc:
                         state.auth_error = str(exc)
-                        print(f"error: {exc}  (retry /login)")
+                        print(f"error: {exc}  (retry /login-key)")
                 print(msg)
                 print(render_screen(state))
                 continue
             if result.kind == "logout":
+                grok_logout()
                 creds.clear()
                 state.has_api = False
                 state.auth_state = "signed_out"
@@ -351,10 +441,13 @@ def run_shell(
                 print(render_screen(state))
                 continue
             if result.kind == "whoami":
-                if state.auth_state != "signed_in":
-                    print("signed out")
-                else:
+                ident = load_identity()
+                if ident and ident.signed_in:
+                    print(f"signed in  {ident.label}")
+                elif state.auth_state == "signed_in":
                     print(f"signed in  {state.auth_label or mask_secret(None)}")
+                else:
+                    print("signed out")
                 continue
             if result.kind == "agents":
                 if catalog is None:

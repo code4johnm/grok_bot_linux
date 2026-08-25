@@ -176,5 +176,5 @@ def test_electron_packaging_untouched() -> None:
 def test_no_official_grok_cli_module() -> None:
     assert not (PKG / "src/grok_bot_tui/grok.py").exists()
     source = (PKG / "src/grok_bot_tui/app.py").read_text()
-    assert "find_grok" not in source
     assert "Grok Build TUI" not in source
+    assert "find_grok_cli" in source  # official grok login --device-auth only
