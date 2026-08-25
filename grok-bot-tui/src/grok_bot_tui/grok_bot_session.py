@@ -1,7 +1,7 @@
 """Grok Bot (Electron GUI) session — not grok CLI, not API keys.
 
 Sign-in happens in the official grok-bot window (Cursor SSO, e.g. Gmail).
-This module does not read Cookies, sand-secrets, or scrape tokens.
+This module does not read Cookies. Session tokens live in grok_bot_auth.py.
 """
 
 from __future__ import annotations

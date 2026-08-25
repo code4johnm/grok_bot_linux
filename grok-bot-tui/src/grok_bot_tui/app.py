@@ -29,6 +29,8 @@ from grok_bot_tui.auth import (
     signin_url,
 )
 from grok_bot_tui.client import GrokAPIError, GrokClient
+from grok_bot_tui.grok_bot_auth import load_access_token
+from grok_bot_tui.grok_bot_client import GrokBotAPIError, GrokBotClient
 from grok_bot_tui.config import Config, load_config
 from grok_bot_tui.grok_bot_session import (
     BOT_HOME_URL,
@@ -40,23 +42,22 @@ from grok_bot_tui.grok_bot_session import (
 )
 from grok_bot_tui.gui import launch_grok_bot
 from grok_bot_tui.pixel import sprite_inline
-from grok_bot_tui.usage import append_usage_line
 
-NEED_KEY_MSG = (
-    "Chat stays in this terminal. Set XAI_API_KEY or /login-key, then send again."
+NEED_BOT_MSG = (
+    "Chat uses your Grok Bot session, not an API key. "
+    "Sign in with /login (Gmail in grok-bot), then send again."
 )
 
 HELP = f"""{TITLE}
 Companion TUI for Grok Bot. Chat stays in this terminal. This is not Grok.
 
-  /login          Cursor SSO for the roster (Gmail in grok-bot, optional)
-  /login-key      API key for in-TUI chat (api.x.ai Responses)
+  /login          Grok Bot SSO (Gmail in grok-bot) — this session is used for chat
   /logout         Sign this TUI out
-  /whoami         Show truncated account/key label
+  /whoami         Show Grok Bot session label
   /agents         Refresh bots from the signed-in Grok Bot roster
   j / k  or ↑↓    Move selection (bot list)
   Enter           Chat with the selected bot in this TUI
-  <text>          Send a message; replies stream in this terminal
+  <text>          Send a message to that Grok Bot in this terminal
   /gui            Optional desktop (never used for chat)
   /clear          Clear the transcript
   /help           Show this help
@@ -396,34 +397,25 @@ def _init_state(
     creds: CredentialStore,
 ) -> tuple[SessionState, GrokClient | None, AgentCatalog | None]:
     loaded = creds.load()
-    key = cfg.api_key or str(loaded.get("api_key") or "") or None
     ident = load_identity()
-    signed = ident.signed_in or bool(key)
+    token = load_access_token()
+    signed = ident.signed_in
     state = SessionState(
         system=cfg.system,
         model=cfg.model,
-        has_api=bool(key),
-        auth_label=(ident.label if ident.signed_in else str(loaded.get("label") or mask_secret(key))),
+        has_api=signed,
+        auth_label=(ident.label if ident.signed_in else ""),
     )
     if ident.signed_in:
         state.auth_state = "signed_in"
         state.view = "agents"
         _fill_session_bots(state)
-    if key and client is None:
-        client = GrokClient(api_key=key, model=cfg.model, timeout=cfg.timeout, base_url=cfg.base_url)
-    if key and catalog is None:
-        catalog = AgentCatalog(key, base_url=cfg.base_url, timeout=min(cfg.timeout, 30.0))
+    if token and not isinstance(client, GrokBotClient):
+        if client is not None and hasattr(client, "close"):
+            client.close()
+        client = GrokBotClient(token, timeout=min(cfg.timeout, 120.0))
     if ident.signed_in and not state.agents:
         _fill_session_bots(state)
-    elif catalog is not None and not state.agents:
-        try:
-            catalog.refresh()
-            state.agents = list(catalog.cache)
-            if state.agents:
-                state.model = state.agents[0].id
-                state.bot_name = state.agents[0].name
-        except GrokAPIError as exc:
-            state.auth_error = str(exc)
     elif signed and not state.agents:
         _fill_session_bots(state)
     return state, client, catalog
@@ -431,7 +423,7 @@ def _init_state(
 
 def run_shell(
     cfg: Config,
-    client: GrokClient | None,
+    client: GrokBotClient | GrokClient | None,
     *,
     gui_popen: Callable[..., object] | None = None,
     gui_candidates: list[Path] | None = None,
@@ -477,10 +469,17 @@ def run_shell(
                 emit=emit,
             )
             emit(msg)
+            if not isinstance(client, GrokBotClient):
+                token = load_access_token()
+                if token:
+                    if client is not None:
+                        client.close()
+                    client = GrokBotClient(token, timeout=min(cfg.timeout, 120.0))
+                    holder["client"] = client
             return True
         if result.kind == "login_key":
             new_client, new_catalog, msg = _do_login_key(state, creds, cfg, result.message)
-            if new_client is not None:
+            if new_client is not None and not isinstance(client, GrokBotClient):
                 if client is not None:
                     client.close()
                 client = new_client
@@ -690,44 +689,42 @@ def run_shell(
 
 def _send_chat(
     state: SessionState,
-    client: GrokClient | None,
+    client: GrokBotClient | GrokClient | None,
     text: str,
     *,
     emit: Callable[[str], None] | None = None,
     refresh: Callable[[], None] | None = None,
 ) -> None:
-    """Stream a reply into the TUI. Never launches a GUI."""
+    """Stream a Grok Bot reply into the TUI. Never launches a GUI. Never uses xAI API keys."""
     log = emit or print
-    if client is None:
-        log(NEED_KEY_MSG)
+    if not isinstance(client, GrokBotClient):
+        log(NEED_BOT_MSG)
         return
     if state.streaming:
         log("still responding…")
+        return
+    agent = state.active_agent
+    if agent is None:
+        log("Select a bot first.")
         return
     state.messages.append({"role": "user", "content": text})
     draft: dict[str, str] = {"role": "assistant", "content": ""}
     state.messages.append(draft)
     payload = [item for item in state.messages if item is not draft]
-    client.model = state.model
     state.streaming = True
     if refresh:
         refresh()
     try:
         parts: list[str] = []
-        for token in client.stream_text(payload):
+        for token in client.stream_text(payload, agent_id=agent.id):
             parts.append(token)
             draft["content"] = "".join(parts)
             if refresh:
                 refresh()
         if not draft["content"]:
             state.messages.pop()
-        if client.last_usage is not None:
-            state.last_usage = client.last_usage
-            state.total_input += client.last_usage["input_tokens"]
-            state.total_output += client.last_usage["output_tokens"]
-            append_usage_line(client.last_usage, session=state.bot_name, model=state.model)
         log("")
-    except GrokAPIError as exc:
+    except GrokBotAPIError as exc:
         if draft in state.messages:
             state.messages.remove(draft)
         if state.messages and state.messages[-1].get("role") == "user":
@@ -754,18 +751,11 @@ def main(argv: list[str] | None = None) -> int:
         print("This is not Grok.", file=sys.stderr)
         return 2
     store = CredentialStore()
-    loaded = store.load()
-    key = cfg.api_key or str(loaded.get("api_key") or "") or None
-    client: GrokClient | None = None
+    token = load_access_token()
+    client: GrokBotClient | None = None
     catalog: AgentCatalog | None = None
-    if key:
-        client = GrokClient(
-            api_key=key,
-            model=cfg.model,
-            timeout=cfg.timeout,
-            base_url=cfg.base_url,
-        )
-        catalog = AgentCatalog(key, base_url=cfg.base_url, timeout=min(cfg.timeout, 30.0))
+    if token:
+        client = GrokBotClient(token, timeout=min(cfg.timeout, 120.0))
     try:
         return run_shell(cfg, client, store=store, catalog=catalog)
     except KeyboardInterrupt:

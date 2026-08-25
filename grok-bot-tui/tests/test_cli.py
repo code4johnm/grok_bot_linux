@@ -79,9 +79,11 @@ def test_version_and_status_subprocess() -> None:
     assert "token" not in json.dumps(payload)
 
 
-def test_chat_cli_requires_key(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_chat_cli_requires_grok_bot_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GROK_BOT_ACCESS_TOKEN", raising=False)
     monkeypatch.delenv("XAI_API_KEY", raising=False)
     monkeypatch.delenv("GROK_API_KEY", raising=False)
+    monkeypatch.setenv("XDG_CONFIG_HOME", "/tmp/grok-tui-no-such-config")
     cfg = load_config(["chat", "hello"])
     assert cfg.command == "chat"
     assert run_cli(cfg) == 2

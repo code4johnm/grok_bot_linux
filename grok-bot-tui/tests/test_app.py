@@ -146,39 +146,66 @@ def test_commands_gui_clear_quit_help_bot_chat() -> None:
 
 
 def test_send_chat_stays_in_terminal() -> None:
+    import base64
+    import json
+
     import httpx
 
-    from grok_bot_tui.app import NEED_KEY_MSG, _send_chat
-    from grok_bot_tui.client import GrokClient
+    from grok_bot_tui.agents import Agent
+    from grok_bot_tui.app import NEED_BOT_MSG, _send_chat
+    from grok_bot_tui.grok_bot_client import GrokBotClient
 
     state = _state(has_api=True)
     state.view = "chat"
+    state.agents = [Agent(id="bot-ops", name="Ops", blurb="queue")]
     notes: list[str] = []
     _send_chat(state, None, "hello", emit=notes.append)
-    assert notes == [NEED_KEY_MSG]
+    assert notes == [NEED_BOT_MSG]
     assert all(item.get("role") != "user" for item in state.messages)
     source = (PKG / "src/grok_bot_tui/app.py").read_text(encoding="utf-8")
     send = source.split("def _send_chat", 1)[1].split("\ndef main", 1)[0]
     assert "launch_grok_bot" not in send
+    assert "XAI_API_KEY" not in send
     assert "webbrowser" not in send
 
-    sse = (
-        'data: {"type":"response.output_text.delta","delta":"Hi"}\n\n'
-        'data: {"type":"response.output_text.delta","delta":" there"}\n\n'
-        "data: [DONE]\n\n"
-    )
+    lists = {"n": 0}
+    reply_body = base64.b64encode(
+        json.dumps(
+            {
+                "kind": "message",
+                "role": "assistant",
+                "content": "Hi there",
+                "isStreaming": False,
+            }
+        ).encode("utf-8")
+    ).decode("ascii")
 
     def handler(request: httpx.Request) -> httpx.Response:
-        assert b"hello" in request.content
-        return httpx.Response(200, headers={"content-type": "text/event-stream"}, content=sse)
+        path = str(request.url.path)
+        if path.endswith("ListGrokBotTranscriptEntries"):
+            lists["n"] += 1
+            if lists["n"] == 1:
+                return httpx.Response(200, json={"generation": 1, "entries": []})
+            return httpx.Response(
+                200,
+                json={
+                    "generation": 1,
+                    "entries": [{"seq": "2", "entryKind": "message", "body": reply_body}],
+                },
+            )
+        if path.endswith("CommitGrokBotTranscriptEntries"):
+            assert b"bot-ops" in request.content
+            assert b"send-message" in request.content
+            return httpx.Response(200, json={"committedCount": 1})
+        return httpx.Response(404, json={"message": path})
 
-    client = GrokClient(
-        api_key="test-key",
-        model="grok-4.6",
+    client = GrokBotClient(
+        "test-grok-bot-token",
         timeout=5.0,
-        base_url="https://api.x.ai/v1",
         transport=httpx.MockTransport(handler),
     )
+    client.poll_sleep = lambda _s: None
+    client.poll_interval = 0
     notes = []
     _send_chat(state, client, "hello", emit=notes.append)
     client.close()
@@ -216,7 +243,7 @@ def test_package_is_not_grok() -> None:
     assert "does **not** read Cookies" in readme
     assert "does **not** call the official `grok` CLI" in readme
     assert "Sales Outbound" in readme  # documented as stale-install symptom only
-    assert "0.5.0" in readme
+    assert "0.6.0" in readme
     assert "Chat stays in this terminal" in readme or "chat stays" in readme.lower()
     assert "Raspberry Pi" in readme
     assert "install.sh" in readme

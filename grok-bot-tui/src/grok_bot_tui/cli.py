@@ -7,8 +7,9 @@ import platform
 import sys
 
 from grok_bot_tui import PROG, TITLE, __version__
-from grok_bot_tui.client import GrokAPIError, GrokClient
 from grok_bot_tui.config import Config
+from grok_bot_tui.grok_bot_auth import load_access_token
+from grok_bot_tui.grok_bot_client import GrokBotAPIError, GrokBotClient
 from grok_bot_tui.grok_bot_session import last_selected_agent_id, load_identity, session_bots
 from grok_bot_tui.gui import desktop_supported, find_desktop, machine_arch
 
@@ -116,46 +117,42 @@ def _chat(cfg: Config) -> int:
     text = " ".join(cfg.words).strip()
     if not text:
         print(f"usage: {PROG} chat <message>", file=sys.stderr)
-        print("Chat stays in this terminal. This is not Grok.", file=sys.stderr)
+        print("Chat uses your Grok Bot session in this terminal. This is not Grok.", file=sys.stderr)
         return 2
-    if not cfg.api_key:
+    token = load_access_token()
+    if not token:
         print(
-            "Chat stays in this terminal. Set XAI_API_KEY or grok-tui-shell --api-key.",
+            "Chat uses Grok Bot credentials, not an API key. "
+            "Sign in with grok-bot (Gmail), then retry.",
             file=sys.stderr,
         )
         return 2
     ident = load_identity()
-    system = cfg.system
-    if ident.signed_in:
-        rows = session_bots()
-        selected = last_selected_agent_id()
-        pick = next((row for row in rows if row["id"] == selected), rows[0] if rows else None)
-        if pick is not None:
-            extra = (pick.get("instructions") or pick.get("blurb") or "").strip()
-            system = (
-                f"You are {pick['name']}, a teammate in Grok GUI TUI shell. "
-                "Reply in this terminal only. This is not Grok."
-            )
-            if extra:
-                system = f"{system}\n{extra}"
+    rows = session_bots() if ident.signed_in else []
+    selected = last_selected_agent_id()
+    pick = next((row for row in rows if row["id"] == selected), rows[0] if rows else None)
+    if pick is None:
+        print("No Grok Bot selected. Open grok-bot, then retry.", file=sys.stderr)
+        return 1
     try:
-        with GrokClient(
-            api_key=cfg.api_key,
-            model=cfg.model,
-            timeout=cfg.timeout,
-            base_url=cfg.base_url,
-        ) as client:
-            reply = client.complete(
-                [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": text},
-                ]
-            )
-    except GrokAPIError as exc:
+        with GrokBotClient(token, timeout=min(cfg.timeout, 120.0)) as client:
+            parts: list[str] = []
+            for chunk in client.stream_text(
+                [{"role": "user", "content": text}],
+                agent_id=pick["id"],
+                interval=0.4,
+                timeout=min(cfg.timeout, 90.0),
+            ):
+                parts.append(chunk)
+                if not cfg.json_out:
+                    print(chunk, end="", flush=True)
+            reply = "".join(parts)
+    except GrokBotAPIError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     if cfg.json_out:
-        print(json.dumps({"text": reply}))
+        print(json.dumps({"bot": pick["name"], "text": reply}))
         return 0
-    print(reply)
+    if reply and not reply.endswith("\n"):
+        print()
     return 0
