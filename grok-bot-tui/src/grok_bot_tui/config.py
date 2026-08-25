@@ -10,7 +10,7 @@ from grok_bot_tui import PROG, TITLE
 
 DEFAULT_MODEL = "grok-4.6"
 DEFAULT_BASE_URL = "https://api.x.ai/v1"
-DEFAULT_SYSTEM = "You are a short, helpful chat in grok-bot-tui. This is not Grok."
+DEFAULT_SYSTEM = "You are a short, helpful chat in Grok GUI TUI shell. This is not Grok."
 DEFAULT_TIMEOUT = 3600.0
 
 
@@ -51,12 +51,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=PROG,
         description=(
-            f"{TITLE} — one bot thread + compose for the grok-bot app. "
+            f"{TITLE} — companion TUI for the Grok GUI. "
+            "/login opens the official console (OSC 8 + raw URL). "
             "/gui launches packaged grok-bot on x86_64. "
-            "Typing or /chat uses xAI Responses when a key is set. "
             "This is not Grok."
         ),
-        epilog="Commands: <text> /chat /gui /bot /model /clear /help /quit",
+        epilog="Commands: /login /logout /whoami /agents /chat /gui /help /quit",
     )
     parser.add_argument(
         "--api-key",

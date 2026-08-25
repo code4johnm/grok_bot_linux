@@ -32,14 +32,14 @@ def _state(*, has_api: bool = False, bot: str = DEFAULT_BOT) -> SessionState:
 
 def test_help_and_module_branding() -> None:
     text = build_parser().format_help()
-    assert PROG in text
-    assert TITLE == "grok-bot-tui"
-    assert "This is not Grok" in text or "this is not Grok" in text.lower()
+    assert TITLE == "Grok GUI TUI shell"
+    assert TITLE in text or PROG in text
+    assert "not Grok" in text
     assert "Grok GUI companion" not in text
     assert "this is Grok" not in text.lower()
     assert "https://grok.com" not in text
     assert "/gui" in text
-    assert "/chat" in text
+    assert "/login" in text
 
 
 def test_module_help_exits_zero_without_key() -> None:
@@ -68,13 +68,14 @@ def test_load_config_without_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_layout_is_one_thread() -> None:
-    state = _state()
+    state = _state(has_api=True)
+    state.view = "chat"
     screen = render_screen(state)
-    assert render_header(state) == "grok-bot  ·  grok-bot-tui"
-    assert render_footer() == "grok-bot-tui"
+    assert render_header(state) == "Grok GUI TUI shell"
+    assert "signed in" in render_footer(state)
+    assert "shell" in render_footer(state)
     assert render_transcript(state) == "(no messages)"
-    assert screen.startswith("grok-bot  ·  grok-bot-tui")
-    assert screen.endswith("grok-bot-tui")
+    assert "Grok GUI TUI shell" in screen
     state.messages.append({"role": "user", "content": "hi"})
     state.messages.append({"role": "assistant", "content": "hello"})
     body = render_transcript(state)
@@ -124,19 +125,17 @@ def test_gui_missing_on_x86_no_browser() -> None:
 
 def test_commands_gui_clear_quit_help_bot_chat() -> None:
     state = _state(has_api=True)
+    state.view = "chat"
     assert handle_command("/gui", state).kind == "gui"
     assert handle_command("/quit", state).kind == "quit"
     help_result = handle_command("/help", state)
-    assert PROG in help_result.message
+    assert TITLE in help_result.message
     assert "/gui" in help_result.message
-    assert "/chat" in help_result.message
-    assert "/bot" in help_result.message
+    assert "/login" in help_result.message
+    assert "/agents" in help_result.message
     assert "This is not Grok" in help_result.message
     assert "Grok GUI companion" not in help_result.message
-    assert "/grok " not in help_result.message
     assert handle_command("/clear", state).kind == "clear"
-    assert handle_command("/bot ops", state).message == "Thread: ops"
-    assert state.bot_name == "ops"
     typed = handle_command("hello there", state)
     assert typed.kind == "chat"
     assert typed.send_text == "hello there"
@@ -147,9 +146,9 @@ def test_commands_gui_clear_quit_help_bot_chat() -> None:
 def test_chat_without_key() -> None:
     state = _state(has_api=False)
     result = handle_command("hello", state)
-    assert result.kind == "need_key"
-    assert "XAI_API_KEY" in result.message
+    assert result.kind == "login"
     assert handle_command("/chat", state).kind == "need_key"
+    assert handle_command("/login", state).kind == "login"
 
 
 def test_package_is_not_grok() -> None:

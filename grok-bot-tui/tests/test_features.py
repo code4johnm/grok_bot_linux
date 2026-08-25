@@ -15,7 +15,7 @@ from grok_bot_tui.usage import append_usage_line, format_meter, parse_usage
 
 def test_help_lists_minimal_commands() -> None:
     text = build_parser().format_help()
-    for name in ("/chat", "/gui", "/bot", "/model", "/clear", "/help", "/quit"):
+    for name in ("/chat", "/gui", "/login", "/agents", "/help", "/quit"):
         assert name in text
     assert "/send" not in text
     assert "https://grok.com" not in text

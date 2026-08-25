@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "grok-bot-tui"
-version = "0.1.6"
-description = "grok-bot-tui — one-thread terminal UI for the grok-bot app (not Grok)"
+version = "0.2.0"
+description = "Grok GUI TUI shell — companion client (not Grok)"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -19,6 +19,7 @@ dev = ["pytest>=8.0"]
 
 [project.scripts]
 grok-bot-tui = "grok_bot_tui.__main__:main"
+grok-tui-shell = "grok_bot_tui.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,7 +1,7 @@
-"""grok-bot-tui: one-thread terminal UI around the grok-bot Electron app."""
+"""Grok GUI TUI shell: companion terminal client. This is not Grok."""
 
-__version__ = "0.1.6"
-PROG = "grok-bot-tui"
-TITLE = "grok-bot-tui"
-STATUS = "grok-bot-tui"
-DEFAULT_BOT = "grok-bot"
+__version__ = "0.2.0"
+PROG = "grok-tui-shell"
+TITLE = "Grok GUI TUI shell"
+STATUS = "Grok GUI TUI shell"
+DEFAULT_BOT = "shell"
