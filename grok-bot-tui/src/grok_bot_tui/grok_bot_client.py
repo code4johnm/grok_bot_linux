@@ -98,6 +98,7 @@ class GrokBotClient:
                 "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json",
                 "Connect-Protocol-Version": "1",
+                "Connect-Timeout-Ms": "120000",
                 "x-cursor-client-type": "sand",
                 "x-cursor-client-version": client_version,
                 "x-sand-box-namespace": "prod",
@@ -164,7 +165,7 @@ class GrokBotClient:
         *,
         agent_id: str,
         sleep: Callable[[float], None] | None = None,
-        timeout: float = 90.0,
+        timeout: float = 45.0,
         interval: float | None = None,
     ) -> Iterator[str]:
         """Send the latest user line to the Grok Bot agent and yield reply text."""
@@ -178,6 +179,10 @@ class GrokBotClient:
                 break
         if not user_text.strip():
             raise GrokBotAPIError("Empty message.")
+        try:
+            self.rpc("EnsureSandBox", {})
+        except GrokBotAPIError:
+            pass
         listed = self.list_transcript(agent_id)
         generation = int(listed.get("generation") or 1)
         seq = _next_seq(listed.get("entries"))
@@ -204,7 +209,9 @@ class GrokBotClient:
             elif last != before and not _still_streaming(listed.get("entries")):
                 return
         if last == before:
-            raise GrokBotAPIError("Grok Bot did not reply. Try again, or open grok-bot once to refresh the session.")
+            raise GrokBotAPIError(
+                "Grok Bot did not reply in time. Keep grok-bot signed in so the bot computer is running, then try again."
+            )
 
 
 def _next_seq(entries: Any) -> int:

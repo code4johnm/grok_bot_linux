@@ -160,8 +160,9 @@ def test_send_chat_stays_in_terminal() -> None:
     state.agents = [Agent(id="bot-ops", name="Ops", blurb="queue")]
     notes: list[str] = []
     _send_chat(state, None, "hello", emit=notes.append)
-    assert notes == [NEED_BOT_MSG]
-    assert all(item.get("role") != "user" for item in state.messages)
+    assert NEED_BOT_MSG in notes
+    assert any(item.get("role") == "user" and item.get("content") == "hello" for item in state.messages)
+    assert any(item.get("role") == "assistant" and NEED_BOT_MSG in (item.get("content") or "") for item in state.messages)
     source = (PKG / "src/grok_bot_tui/app.py").read_text(encoding="utf-8")
     send = source.split("def _send_chat", 1)[1].split("\ndef main", 1)[0]
     assert "launch_grok_bot" not in send

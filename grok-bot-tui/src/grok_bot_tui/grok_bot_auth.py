@@ -7,8 +7,10 @@ Does not read Cookies. Never logs the token.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -28,22 +30,130 @@ def secrets_path(*, cfg: Path | None = None) -> Path:
     return (cfg or config_dir()) / "sand-secrets.json"
 
 
+def _b64decode(blob: str) -> bytes | None:
+    pad = "=" * ((4 - len(blob) % 4) % 4)
+    for candidate in (blob, blob + pad):
+        try:
+            return base64.b64decode(candidate)
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def _libsecret_passwords() -> list[bytes]:
+    out: list[bytes] = []
+    lookups = (
+        ("application", "Grok Bot"),
+        ("application", "grok-bot"),
+        ("application", "Chrome"),
+        ("application", "Chromium"),
+        ("xdg:schema", "chrome_libsecret_os_crypt_password_v2"),
+    )
+    for key, value in lookups:
+        try:
+            proc = subprocess.run(
+                ["secret-tool", "lookup", key, value],
+                capture_output=True,
+                timeout=2,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        pw = proc.stdout.strip()
+        if proc.returncode == 0 and pw:
+            out.append(pw)
+    extra = os.environ.get("GROK_BOT_SAFE_STORAGE_KEY", "").strip()
+    if extra:
+        out.append(extra.encode("utf-8"))
+    # Chromium defaults used when the OS store is missing.
+    out.extend([b"peanuts", b""])
+    seen: set[bytes] = set()
+    uniq: list[bytes] = []
+    for item in out:
+        if item not in seen:
+            seen.add(item)
+            uniq.append(item)
+    return uniq
+
+
+def _unpad_pkcs7(data: bytes) -> bytes:
+    if not data:
+        return data
+    pad = data[-1]
+    if 1 <= pad <= 16 and data.endswith(bytes([pad]) * pad):
+        return data[:-pad]
+    return data
+
+
+def _looks_like_token(text: str) -> bool:
+    if len(text) < 16:
+        return False
+    if any(ch in text for ch in "\x00\r"):
+        return False
+    return True
+
+
+def _decrypt_os_crypt(blob: str, password: bytes) -> str | None:
+    raw = _b64decode(blob)
+    if raw is None or len(raw) < 20:
+        return None
+    if raw.startswith(b"v10") or raw.startswith(b"v11"):
+        data = raw[3:]
+    else:
+        data = raw
+    try:
+        from cryptography.hazmat.backends import default_backend
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+    except Exception:
+        return None
+    key = hashlib.pbkdf2_hmac("sha1", password, b"saltysalt", 1, 16)
+    backend = default_backend()
+    # v10/v11 AES-128-CBC, IV of 16 spaces (Chromium Linux).
+    if len(data) >= 16 and len(data) % 16 == 0:
+        try:
+            decryptor = Cipher(algorithms.AES(key), modes.CBC(b" " * 16), backend=backend).decryptor()
+            plain = _unpad_pkcs7(decryptor.update(data) + decryptor.finalize())
+            text = plain.decode("utf-8")
+            if _looks_like_token(text):
+                return text
+        except Exception:
+            pass
+    # v11 AES-128-GCM: 12-byte nonce, 16-byte tag.
+    if len(data) > 28:
+        nonce, rest = data[:12], data[12:]
+        tag, ct = rest[-16:], rest[:-16]
+        try:
+            decryptor = Cipher(algorithms.AES(key), modes.GCM(nonce, tag), backend=backend).decryptor()
+            text = (decryptor.update(ct) + decryptor.finalize()).decode("utf-8")
+            if _looks_like_token(text):
+                return text
+        except Exception:
+            pass
+    return None
+
+
 def _decode_stored(value: str) -> str | None:
     if not value:
         return None
     if value.startswith(PLAINTEXT_PREFIX):
         blob = value[len(PLAINTEXT_PREFIX) :]
+        raw = _b64decode(blob)
+        if raw is None:
+            return None
         try:
-            return base64.b64decode(blob).decode("utf-8")
-        except (OSError, ValueError, UnicodeDecodeError):
-            try:
-                return base64.b64decode(blob + "=" * ((4 - len(blob) % 4) % 4)).decode("utf-8")
-            except (OSError, ValueError, UnicodeDecodeError):
-                return None
+            return raw.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
     if value.startswith(SCOPED_PREFIX):
-        # scoped:v1:<64-hex-scope>:<ciphertext-b64> — ciphertext still OS-encrypted.
-        return None
-    # v10/v11 Electron safeStorage blobs stay in the desktop store.
+        rest = value[len(SCOPED_PREFIX) :]
+        _, sep, cipher = rest.partition(":")
+        if not sep:
+            return None
+        value = cipher
+    for password in _libsecret_passwords():
+        got = _decrypt_os_crypt(value, password)
+        if got:
+            return got
     return None
 
 

@@ -68,6 +68,9 @@ def test_empty_agents_and_nav() -> None:
     ]
     assert handle_command("j", state).kind == "agent_down"
     assert handle_command("k", state).kind == "agent_up"
+    typed = handle_command("hello there", state)
+    assert typed.kind == "agent_select"
+    assert typed.send_text == "hello there"
     assert handle_command("/agents", state).kind == "agents"
     assert handle_command("/whoami", state).kind == "whoami"
     assert handle_command("/logout", state).kind == "logout"

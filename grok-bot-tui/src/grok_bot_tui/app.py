@@ -45,7 +45,8 @@ from grok_bot_tui.pixel import sprite_inline
 
 NEED_BOT_MSG = (
     "Chat uses your Grok Bot session, not an API key. "
-    "Sign in with /login (Gmail in grok-bot), then send again."
+    "I could not read the session token the desktop encrypts. "
+    "Keep grok-bot signed in (Gmail), then send again."
 )
 
 HELP = f"""{TITLE}
@@ -219,7 +220,8 @@ def handle_command(line: str, state: SessionState) -> CommandResult:
                 return CommandResult("agent_down")
             if text in ("k", "p"):
                 return CommandResult("agent_up")
-            return CommandResult("agent_select")
+            # Typing on the list is a message to the highlighted bot, not a silent select.
+            return CommandResult("agent_select", send_text=text)
         return CommandResult("chat", send_text=text)
 
     cmd, *rest = text.split(maxsplit=1)
@@ -554,7 +556,8 @@ def run_shell(
             if agent:
                 _enter_bot_chat(state, agent)
                 emit(f"active bot: {agent.name} — chatting in this terminal")
-            return True
+            if not result.send_text:
+                return True
         if result.kind == "gui":
             emit(
                 launch_grok_bot(
@@ -698,13 +701,21 @@ def _send_chat(
     """Stream a Grok Bot reply into the TUI. Never launches a GUI. Never uses xAI API keys."""
     log = emit or print
     if not isinstance(client, GrokBotClient):
-        log(NEED_BOT_MSG)
-        return
+        token = load_access_token()
+        if token:
+            client = GrokBotClient(token)
+        else:
+            state.messages.append({"role": "user", "content": text})
+            state.messages.append({"role": "assistant", "content": NEED_BOT_MSG})
+            log(NEED_BOT_MSG)
+            return
     if state.streaming:
         log("still responding…")
         return
     agent = state.active_agent
     if agent is None:
+        state.messages.append({"role": "user", "content": text})
+        state.messages.append({"role": "assistant", "content": "Select a bot first."})
         log("Select a bot first.")
         return
     state.messages.append({"role": "user", "content": text})
@@ -712,6 +723,7 @@ def _send_chat(
     state.messages.append(draft)
     payload = [item for item in state.messages if item is not draft]
     state.streaming = True
+    log(f"Waiting for {agent.name}…")
     if refresh:
         refresh()
     try:
