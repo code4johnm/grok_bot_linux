@@ -60,6 +60,10 @@ def build_parser() -> argparse.ArgumentParser:
             "Use /gui to open the official GUI. Optional API companion "
             "needs XAI_API_KEY or GROK_API_KEY."
         ),
+        epilog=(
+            "Commands: /gui /help /clear /notes /chat /prompt /analyze "
+            "/model /sessions /new /open /forget /quit"
+        ),
     )
     parser.add_argument(
         "--api-key",

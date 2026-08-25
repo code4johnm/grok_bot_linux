@@ -8,6 +8,8 @@ from typing import Any
 
 import httpx
 
+from grok_bot_tui.usage import parse_usage
+
 DEFAULT_BASE_URL = "https://api.x.ai/v1"
 
 
@@ -123,6 +125,7 @@ class GrokClient:
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self.model = model
+        self.last_usage: dict[str, int] | None = None
         self._http = httpx.Client(
             base_url=base_url.rstrip("/"),
             timeout=timeout,
@@ -153,6 +156,7 @@ class GrokClient:
         return body
 
     def complete(self, messages: list[dict[str, str]]) -> str:
+        self.last_usage = None
         try:
             response = self._http.post("/responses", json=self._payload(messages, stream=False))
         except httpx.TimeoutException as exc:
@@ -163,6 +167,7 @@ class GrokClient:
 
     def stream_text(self, messages: list[dict[str, str]]) -> Iterator[str]:
         """Yield token deltas from Responses API SSE (`stream: true`)."""
+        self.last_usage = None
         try:
             with self._http.stream(
                 "POST",
@@ -189,6 +194,7 @@ class GrokClient:
         if response.status_code >= 400:
             raise GrokAPIError(error_message_from_body(body, response.status_code))
         text = output_text(body if isinstance(body, Mapping) else None)
+        self.last_usage = parse_usage(body if isinstance(body, Mapping) else None)
         return text
 
     def _read_error_body(self, response: httpx.Response) -> Any:
@@ -201,7 +207,9 @@ class GrokClient:
     def _iter_stream(self, response: httpx.Response) -> Iterator[str]:
         content_type = response.headers.get("content-type", "")
         if "application/json" in content_type and "text/event-stream" not in content_type:
-            text = output_text(self._read_error_body(response) or {})
+            body = self._read_error_body(response) or {}
+            self.last_usage = parse_usage(body if isinstance(body, Mapping) else None)
+            text = output_text(body if isinstance(body, Mapping) else None)
             if text:
                 yield text
             return
@@ -221,8 +229,11 @@ class GrokClient:
                 continue
             if event.get("type") == "response.completed":
                 inner = event.get("response")
-                completed_text = output_text(inner if isinstance(inner, Mapping) else event)
+                payload = inner if isinstance(inner, Mapping) else event
+                completed_text = output_text(payload)
+                self.last_usage = parse_usage(payload)
             elif "output" in event:
                 completed_text = output_text(event)
+                self.last_usage = parse_usage(event) or self.last_usage
         if not got_delta and completed_text:
             yield completed_text
