@@ -42,18 +42,22 @@ from grok_bot_tui.gui import launch_grok_bot
 from grok_bot_tui.pixel import sprite_inline
 from grok_bot_tui.usage import append_usage_line
 
-HELP = f"""{TITLE}
-Companion TUI for Grok Bot (the Electron GUI). This is not Grok.
+NEED_KEY_MSG = (
+    "Chat stays in this terminal. Set XAI_API_KEY or /login-key, then send again."
+)
 
-  /login          Same sign-in as Grok Bot: launch grok-bot + Cursor SSO (Gmail)
-  /login-key      Optional API-key paste for api.x.ai chat only
-  /logout         Sign this TUI out (Grok Bot desktop keeps its own session)
+HELP = f"""{TITLE}
+Companion TUI for Grok Bot. Chat stays in this terminal. This is not Grok.
+
+  /login          Cursor SSO for the roster (Gmail in grok-bot, optional)
+  /login-key      API key for in-TUI chat (api.x.ai Responses)
+  /logout         Sign this TUI out
   /whoami         Show truncated account/key label
   /agents         Refresh bots from the signed-in Grok Bot roster
   j / k  or ↑↓    Move selection (bot list)
-  Enter           Use selected bot
-  <text>          Send to the active bot (desktop) or api.x.ai if a key is set
-  /gui            Launch packaged grok-bot desktop (x86_64)
+  Enter           Chat with the selected bot in this TUI
+  <text>          Send a message; replies stream in this terminal
+  /gui            Optional desktop (never used for chat)
   /clear          Clear the transcript
   /help           Show this help
   /quit           Exit
@@ -77,6 +81,7 @@ class SessionState:
     total_input: int = 0
     total_output: int = 0
     notice: str = ""
+    streaming: bool = False
 
     def __post_init__(self) -> None:
         if not self.messages:
@@ -112,9 +117,14 @@ def render_header(state: SessionState) -> str:
 
 
 def render_footer(state: SessionState) -> str:
-    bot = state.active_agent.name if state.active_agent else "-"
-    auth = "signed in" if state.auth_state == "signed_in" else state.auth_state.replace("_", " ")
-    return f"bot:{bot} | {auth} | shell"
+    bot = state.active_agent.name if state.active_agent else state.bot_name or "-"
+    if state.streaming:
+        phase = "streaming"
+    elif state.auth_state == "signed_in":
+        phase = "signed in"
+    else:
+        phase = state.auth_state.replace("_", " ")
+    return f"bot:{bot} | {phase} | shell"
 
 
 def render_transcript(state: SessionState) -> str:
@@ -163,7 +173,7 @@ def render_agent_list(state: SessionState, *, terminal_width: int | None = None)
         blurb = agent.blurb if len(agent.blurb) <= 36 else agent.blurb[:33] + "…"
         lines.append(f"{mark} {glyph}  {name:<{name_w}} {blurb}")
     lines.append("")
-    lines.append("↑↓ / j k  select   Enter  use bot   /gui  desktop")
+    lines.append("↑↓ / j k  select   Enter  chat in this terminal")
     lines.append(render_footer(state))
     return "\n".join(lines)
 
@@ -249,9 +259,35 @@ def handle_command(line: str, state: SessionState) -> CommandResult:
     return CommandResult("unknown", f"Unknown command {cmd}. Try /help.")
 
 
+def bot_system_prompt(agent: Agent | None, fallback: str) -> str:
+    if agent is None:
+        return fallback
+    body = (agent.instructions or agent.blurb or "").strip()
+    head = (
+        f"You are {agent.name}, a teammate in Grok GUI TUI shell. "
+        "Reply in this terminal only. This is not Grok."
+    )
+    return f"{head}\n{body}".strip() if body else head
+
+
+def _enter_bot_chat(state: SessionState, agent: Agent) -> None:
+    state.bot_name = agent.name
+    state.view = "chat"
+    state.system = bot_system_prompt(agent, state.system)
+    state.reset_messages()
+
+
 def _fill_session_bots(state: SessionState) -> None:
     rows = session_bots()
-    state.agents = [Agent(id=r["id"], name=r["name"], blurb=r["blurb"]) for r in rows]
+    state.agents = [
+        Agent(
+            id=r["id"],
+            name=r["name"],
+            blurb=r["blurb"],
+            instructions=r.get("instructions") or "",
+        )
+        for r in rows
+    ]
     state.agent_index = 0
     selected = last_selected_agent_id()
     if selected:
@@ -517,9 +553,8 @@ def run_shell(
         if result.kind == "agent_select":
             agent = state.active_agent
             if agent:
-                state.bot_name = agent.name
-                state.view = "chat"
-                emit(f"active bot: {agent.name} — assign work in Grok Bot  {BOT_HOME_URL}")
+                _enter_bot_chat(state, agent)
+                emit(f"active bot: {agent.name} — chatting in this terminal")
             return True
         if result.kind == "gui":
             emit(
@@ -536,14 +571,29 @@ def run_shell(
         if result.message:
             emit(result.message)
         if result.send_text:
+            if state.streaming:
+                emit("still responding…")
+                return True
+
+            def refresh() -> None:
+                app = holder.get("app")
+                if app is None:
+                    return
+                try:
+                    app.invalidate()  # type: ignore[union-attr]
+                    renderer = getattr(app, "renderer", None)
+                    layout = getattr(app, "layout", None)
+                    if renderer is not None and layout is not None:
+                        renderer.render(app, layout)
+                except Exception:
+                    pass
+
             _send_chat(
                 state,
                 client,
                 result.send_text,
-                gui_popen=gui_popen,
-                gui_candidates=gui_candidates,
-                gui_arch=gui_arch,
                 emit=emit,
+                refresh=refresh,
             )
         return True
 
@@ -643,29 +693,34 @@ def _send_chat(
     client: GrokClient | None,
     text: str,
     *,
-    gui_popen: Callable[..., object] | None = None,
-    gui_candidates: list[Path] | None = None,
-    gui_arch: str | None = None,
     emit: Callable[[str], None] | None = None,
+    refresh: Callable[[], None] | None = None,
 ) -> None:
+    """Stream a reply into the TUI. Never launches a GUI."""
     log = emit or print
     if client is None:
-        state.messages.append({"role": "user", "content": text})
-        launched = launch_grok_bot(
-            popen=gui_popen,
-            candidates=gui_candidates,
-            arch=gui_arch,
-        )
-        log(f"{launched}  Messages to Bots run in Grok Bot.  {BOT_HOME_URL}")
+        log(NEED_KEY_MSG)
+        return
+    if state.streaming:
+        log("still responding…")
         return
     state.messages.append({"role": "user", "content": text})
+    draft: dict[str, str] = {"role": "assistant", "content": ""}
+    state.messages.append(draft)
+    payload = [item for item in state.messages if item is not draft]
+    client.model = state.model
+    state.streaming = True
+    if refresh:
+        refresh()
     try:
         parts: list[str] = []
-        for token in client.stream_text(state.messages):
+        for token in client.stream_text(payload):
             parts.append(token)
-        reply = "".join(parts)
-        if reply:
-            state.messages.append({"role": "assistant", "content": reply})
+            draft["content"] = "".join(parts)
+            if refresh:
+                refresh()
+        if not draft["content"]:
+            state.messages.pop()
         if client.last_usage is not None:
             state.last_usage = client.last_usage
             state.total_input += client.last_usage["input_tokens"]
@@ -673,8 +728,15 @@ def _send_chat(
             append_usage_line(client.last_usage, session=state.bot_name, model=state.model)
         log("")
     except GrokAPIError as exc:
+        if draft in state.messages:
+            state.messages.remove(draft)
+        if state.messages and state.messages[-1].get("role") == "user":
+            state.messages.pop()
         log(f"error: {exc}")
-        state.messages.pop()
+    finally:
+        state.streaming = False
+        if refresh:
+            refresh()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -685,7 +747,7 @@ def main(argv: list[str] | None = None) -> int:
         return run_cli(cfg)
     if not sys.stdin.isatty() and os.environ.get("GROK_TUI_ALLOW_NOTTY", "").strip() != "1":
         print(
-            "error: no TTY. Use grok-tui-shell version|whoami|bots|status, "
+            "error: no TTY. Use grok-tui-shell version|whoami|bots|status|chat, "
             "or run inside a terminal / tmux (Raspberry Pi autostart).",
             file=sys.stderr,
         )

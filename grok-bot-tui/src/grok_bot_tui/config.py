@@ -16,7 +16,7 @@ DEFAULT_MODEL = "grok-4.6"
 DEFAULT_BASE_URL = "https://api.x.ai/v1"
 DEFAULT_SYSTEM = "You are a short, helpful chat in Grok GUI TUI shell. This is not Grok."
 DEFAULT_TIMEOUT = 3600.0
-CLI_COMMANDS = ("tui", "version", "whoami", "bots", "status")
+CLI_COMMANDS = ("tui", "version", "whoami", "bots", "status", "chat")
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,7 @@ class Config:
     base_url: str
     command: str = "tui"
     json_out: bool = False
+    words: tuple[str, ...] = ()
 
     @property
     def has_api_key(self) -> bool:
@@ -92,13 +93,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=PROG,
         description=(
-            f"{TITLE} — companion TUI for Grok Bot (the Electron GUI). "
-            "/login launches grok-bot and prints Cursor SSO (OSC 8). "
-            "/gui launches packaged grok-bot on x86_64. "
-            "Commands: tui (default), version, whoami, bots, status. "
+            f"{TITLE} — companion TUI for Grok Bot. "
+            "Chat stays in this terminal (xAI Responses API). "
+            "Commands: tui (default), version, whoami, bots, status, chat. "
             "This is not Grok."
         ),
-        epilog="TUI slash commands: /login /logout /whoami /agents /chat /gui /help /quit",
+        epilog="TUI slash commands: /login /logout /whoami /agents /chat /gui /help /quit. Chat never launches a GUI.",
     )
     parser.add_argument(
         "--api-key",
@@ -140,6 +140,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=CLI_COMMANDS,
         help="tui (interactive, default) or a non-interactive command.",
     )
+    parser.add_argument(
+        "words",
+        nargs="*",
+        help="Message text for: grok-tui-shell chat <message>",
+    )
     return parser
 
 
@@ -174,6 +179,7 @@ def load_config(argv: list[str] | None = None) -> Config:
         base_url=(args.base_url or _first_env("GROK_BASE_URL") or file_base or DEFAULT_BASE_URL).rstrip("/"),
         command=str(args.command or "tui"),
         json_out=bool(args.json_out),
+        words=tuple(str(w) for w in (args.words or ())),
     )
 
 

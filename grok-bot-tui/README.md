@@ -12,7 +12,7 @@ not the official `grok` CLI (`curl -fsSL https://x.ai/cli/install.sh | bash`).
 | **`grok-tui-shell`** | Fullscreen TUI around that GUI: same sign-in, same bot roster, keyboard navigation. Commands `grok-tui-shell` and `grok-bot-tui` are aliases. |
 | **`grok` CLI** | Separate official product. Device/OIDC at `accounts.x.ai`. This shell does **not** call `grok login`. |
 
-Package: `grok-bot-tui` 0.4.0. Python 3.9+ (Pi 3 Bookworm / Ubuntu 20.04+).
+Package: `grok-bot-tui` 0.5.0. Python 3.9+ (Pi 3 Bookworm / Ubuntu 20.04+).
 License: MIT (this packaging tree). Targets: Ubuntu, Kali Linux, Rocky Linux,
 and Raspberry Pi OS / Ubuntu on Raspberry Pi (x86_64, aarch64, armv7l).
 
@@ -52,8 +52,8 @@ and Raspberry Pi OS / Ubuntu on Raspberry Pi (x86_64, aarch64, armv7l).
   `Bots  (N from signed-in Grok Bot)`.
 - One-row pixel sprites (`█░`) hashed from each bot id. Narrow terminals
   collapse to `[A]`.
-- `j` / `k` or arrow keys move; Enter selects; typing a message opens Grok Bot
-  so you assign the work in the GUI.
+- `j` / `k` or arrow keys move; Enter opens **in-terminal** chat with that bot.
+  Replies stream in the TUI. No GUI is launched for chat.
 
 ## What it does not do
 
@@ -64,7 +64,7 @@ and Raspberry Pi OS / Ubuntu on Raspberry Pi (x86_64, aarch64, armv7l).
 - It does **not** list public x.ai/bot marketing templates (Sales Outbound,
   Talent Scout, …) as if they were your session. If you still see those, you
   are on a stale install (0.3.0 or older). Reinstall and restart; header must
-  show **0.4.0**.
+  show **0.5.0**.
 - It does **not** call the official `grok` CLI or `grok login --device-auth`.
 - It cannot list bots that grok-bot has never synced to disk. Open grok-bot
   once, then `/agents`.
@@ -112,7 +112,7 @@ python3 -m pip install --user -e "./grok-bot-tui[dev]"
 
 ```bash
 python3 -m pip show grok-bot-tui
-# Version: 0.4.0
+# Version: 0.5.0
 ```
 
 Install grok-bot itself on **x86_64** so `/login` can launch the GUI:
@@ -208,6 +208,7 @@ grok-tui-shell --json status
 | `whoami` | GUI session label | 0 signed in, 1 signed out |
 | `bots` | Roster names (same cache as the TUI) | 0 if any, 1 if none |
 | `status` | arch, python, desktop yes/no, signed_in, bot count | 0 |
+| `chat <msg>` | One-shot in-terminal reply (needs API key). Never a GUI. | 0/1/2 |
 
 `man grok-tui-shell` after install (user manpath: `$HOME/.local/share/man`).
 
@@ -216,7 +217,7 @@ grok-tui-shell --json status
 Fullscreen, five rows of chrome:
 
 ```text
-Grok GUI TUI shell  0.4.0                          ← header (reverse)
+Grok GUI TUI shell  0.5.0                          ← header (reverse)
 Bots  (N from signed-in Grok Bot)                  ← body
 > ████  Night Watch             2 unread · …
   ██░░  Ops                     queue
@@ -343,15 +344,26 @@ Typed lines:
 
 ## Talking to a bot
 
-Selecting a bot sets the footer to `bot:<name>` and switches to the chat view.
-Messages to Grok Bot **run in the desktop app**. With no API key, a send:
+Chat stays in this terminal. Selecting a bot (Enter) sets the footer to
+`bot:<name>` and opens the chat view here. Messages are sent to the xAI
+Responses API
+(`https://api.x.ai/v1/responses`) with the selected bot’s name and
+instructions as the system prompt. Replies **stream** into the transcript
+(`you:` / `bot:`). History stays in the session until `/clear`.
 
-1. Records `you: …` in the local transcript.
-2. Launches grok-bot.
-3. Prints that messages run in Grok Bot, plus https://x.ai/bot.
+Chat **never** launches grok-bot, a browser, or any other GUI. That is the
+path on SSH and headless Raspberry Pi as well.
 
-The TUI does not inject the text into the Electron window and does not scrape
-a reply. Finish the task in Grok Bot.
+Need an API key: `XAI_API_KEY`, `GROK_API_KEY`, `--api-key`, or `/login-key`.
+Without a key the TUI stays put and says to set one.
+
+Headless one-shot (no TUI):
+
+```bash
+export XAI_API_KEY=…
+grok-tui-shell chat Hello
+grok-tui-shell --json chat Hello
+```
 
 ## Optional api.x.ai chat
 
@@ -463,7 +475,7 @@ Examples use `$HOME` and `/opt/grok-bot` only.
 
 | Symptom | What to do |
 | --- | --- |
-| Header `0.3.0` and bots named Sales Outbound / Talent Scout / Chief of Staff | Stale install. `./grok-bot-tui/install.sh --yes`, quit the TUI, run `grok-tui-shell` again. Header must be **0.4.0** and the list heading must say `from signed-in Grok Bot`. |
+| Header `0.3.0` and bots named Sales Outbound / Talent Scout / Chief of Staff | Stale install. `./grok-bot-tui/install.sh --yes`, quit the TUI, run `grok-tui-shell` again. Header must be **0.5.0** and the list heading must say `from signed-in Grok Bot`. |
 | Signed out even though grok-bot shows Gmail | `/login`, or check `$HOME/.grokbot/settings.json` exists for this user. `XDG_CONFIG_HOME` must match the desktop. |
 | `No bots in the Grok Bot cache yet` | Open grok-bot so it writes `sand-client-persistence`, then `/agents`. |
 | List does not match the GUI | `/agents`. Hidden bots stay hidden. Pin order follows the GUI. |

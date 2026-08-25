@@ -54,7 +54,7 @@ grok-tui-shell
 (OSC 8 + raw URL). Finish Gmail / Cursor SSO in the GUI. The TUI then lists
 bots from that signed-in roster (`Bots (N from signed-in Grok Bot)`). It does
 not read Cookies and does not call `grok login`. Header version must be
-**0.4.0** or newer (0.3.0 showed public templates instead of your bots).
+**0.5.0** or newer (0.3.0 showed public templates instead of your bots).
 Raspberry Pi (ARM): `./grok-bot-tui/install.sh --yes --autostart` then
 `tmux attach -t grok-tui`. Electron grok-bot is x86_64-only; the TUI still
 runs. See [grok-bot-tui/README.md](grok-bot-tui/README.md).

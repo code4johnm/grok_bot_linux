@@ -141,6 +141,50 @@ def test_commands_gui_clear_quit_help_bot_chat() -> None:
     assert typed.send_text == "hello there"
     slash = handle_command("/chat later", state)
     assert slash.send_text == "later"
+    assert "Chat stays in this terminal" in help_result.message
+    assert "Messages to Bots run in Grok Bot" not in help_result.message
+
+
+def test_send_chat_stays_in_terminal() -> None:
+    import httpx
+
+    from grok_bot_tui.app import NEED_KEY_MSG, _send_chat
+    from grok_bot_tui.client import GrokClient
+
+    state = _state(has_api=True)
+    state.view = "chat"
+    notes: list[str] = []
+    _send_chat(state, None, "hello", emit=notes.append)
+    assert notes == [NEED_KEY_MSG]
+    assert all(item.get("role") != "user" for item in state.messages)
+    source = (PKG / "src/grok_bot_tui/app.py").read_text(encoding="utf-8")
+    send = source.split("def _send_chat", 1)[1].split("\ndef main", 1)[0]
+    assert "launch_grok_bot" not in send
+    assert "webbrowser" not in send
+
+    sse = (
+        'data: {"type":"response.output_text.delta","delta":"Hi"}\n\n'
+        'data: {"type":"response.output_text.delta","delta":" there"}\n\n'
+        "data: [DONE]\n\n"
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert b"hello" in request.content
+        return httpx.Response(200, headers={"content-type": "text/event-stream"}, content=sse)
+
+    client = GrokClient(
+        api_key="test-key",
+        model="grok-4.6",
+        timeout=5.0,
+        base_url="https://api.x.ai/v1",
+        transport=httpx.MockTransport(handler),
+    )
+    notes = []
+    _send_chat(state, client, "hello", emit=notes.append)
+    client.close()
+    assert any(item.get("role") == "user" and item.get("content") == "hello" for item in state.messages)
+    assert any(item.get("role") == "assistant" and "Hi there" in (item.get("content") or "") for item in state.messages)
+    assert state.streaming is False
 
 
 def test_chat_without_key() -> None:
@@ -172,7 +216,8 @@ def test_package_is_not_grok() -> None:
     assert "does **not** read Cookies" in readme
     assert "does **not** call the official `grok` CLI" in readme
     assert "Sales Outbound" in readme  # documented as stale-install symptom only
-    assert "0.4.0" in readme
+    assert "0.5.0" in readme
+    assert "Chat stays in this terminal" in readme or "chat stays" in readme.lower()
     assert "Raspberry Pi" in readme
     assert "install.sh" in readme
     assert "systemctl --user" in readme

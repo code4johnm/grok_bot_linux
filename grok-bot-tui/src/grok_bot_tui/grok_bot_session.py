@@ -300,7 +300,16 @@ def session_bots(*, cfg: Path | None = None) -> list[dict[str, str]]:
         if not ident or not name or ident in seen:
             continue
         seen.add(ident)
-        bots.append({"id": ident, "name": name, "blurb": _bot_blurb(row)})
+        desc = row.get("description")
+        instructions = _one_line(desc if isinstance(desc, str) else "", limit=1200)
+        bots.append(
+            {
+                "id": ident,
+                "name": name,
+                "blurb": _bot_blurb(row),
+                "instructions": instructions,
+            }
+        )
     pinned = _pinned_agent_ids(cfg=cfg)
     if pinned:
         order = {ident: i for i, ident in enumerate(pinned)}

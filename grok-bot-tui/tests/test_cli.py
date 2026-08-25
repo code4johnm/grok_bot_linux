@@ -27,6 +27,9 @@ def test_load_config_cli_command() -> None:
     cfg = load_config(["--json", "bots"])
     assert cfg.command == "bots"
     assert cfg.json_out is True
+    cfg = load_config(["chat", "hello", "there"])
+    assert cfg.command == "chat"
+    assert cfg.words == ("hello", "there")
 
 
 def test_config_file_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -74,6 +77,14 @@ def test_version_and_status_subprocess() -> None:
     assert payload["version"] == __version__
     assert "api_key" not in payload
     assert "token" not in json.dumps(payload)
+
+
+def test_chat_cli_requires_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("XAI_API_KEY", raising=False)
+    monkeypatch.delenv("GROK_API_KEY", raising=False)
+    cfg = load_config(["chat", "hello"])
+    assert cfg.command == "chat"
+    assert run_cli(cfg) == 2
 
 
 def test_whoami_signed_out_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

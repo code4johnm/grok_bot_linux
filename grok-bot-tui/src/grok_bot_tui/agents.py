@@ -17,6 +17,7 @@ class Agent:
     blurb: str
     status: str = "ready"
     icon_url: str | None = None
+    instructions: str = ""
 
     @property
     def seed(self) -> str:
