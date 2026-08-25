@@ -23,6 +23,7 @@ sandbox rules stay on the matching script.
 | --- | --- | --- |
 | **Grok Bot desktop** | Official teammate / virtual-computer GUI from https://x.ai/bot | Community Linux port (no official vendor `.deb`) |
 | **Grok CLI** | Official native Linux agent / Grok Build | `curl -fsSL https://x.ai/cli/install.sh \| bash` |
+| **grok-tui** | Minimal keyboard TUI for the xAI Responses API (`POST /v1/responses`) | `pip install -e ./grok-tui` — see [grok-tui/README.md](grok-tui/README.md) |
 
 The desktop app is a GUI around the same ecosystem. It does **not** replace the
 CLI. Install both.
