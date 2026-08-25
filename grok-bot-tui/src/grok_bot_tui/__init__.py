@@ -1,6 +1,6 @@
-"""grok-bot-tui: companion TUI shell around the official Grok GUI."""
+"""grok-bot-tui: companion TUI around Grok Bot (not Grok the chat app)."""
 
-__version__ = "0.1.3"
+__version__ = "0.1.4"
 PROG = "grok-bot-tui"
-TITLE = "Grok GUI TUI shell"
-STATUS = "Grok GUI companion"
+TITLE = "Grok Bot companion"
+STATUS = "Grok Bot companion"

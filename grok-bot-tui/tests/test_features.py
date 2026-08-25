@@ -1,4 +1,4 @@
-"""Offline: prompt cache, sessions, usage parse, /analyze without a key."""
+"""Offline: prompt cache, official ~/.grok listing, usage parse, /analyze."""
 
 from __future__ import annotations
 
@@ -12,14 +12,17 @@ from grok_bot_tui.app import SessionState, _toolbar, analyze_request, handle_com
 from grok_bot_tui.client import GrokClient
 from grok_bot_tui.config import DEFAULT_MODEL, build_parser
 from grok_bot_tui.prompts import CATALOG, NOTICE, PromptCatalog, PromptError
-from grok_bot_tui.sessions import SessionStore
-from grok_bot_tui.usage import append_audit_line, append_usage_line, format_meter, parse_usage
+from grok_bot_tui.sessions import list_official_sessions
+from grok_bot_tui.usage import append_usage_line, format_meter, parse_usage
 
 
-def test_help_lists_new_commands() -> None:
+def test_help_lists_companion_commands() -> None:
     text = build_parser().format_help()
-    for name in ("/prompt", "/analyze", "/sessions", "/model", "/gui", "/plan", "/send"):
+    for name in ("/prompt", "/analyze", "/sessions", "/model", "/gui", "/plan", "/grok", "/chat"):
         assert name in text
+    assert "/send" not in text
+    assert "Grok API (not Grok Bot)" in text
+    assert "grok.com" not in text
 
 
 def test_prompt_list_is_offline() -> None:
@@ -88,51 +91,16 @@ def test_analyze_with_key_sends_explain_request() -> None:
     assert handle_command("/analyze not-a-url", state).kind == "analyze"
 
 
-def test_sessions_new_open_forget(tmp_path: Path) -> None:
-    store = SessionStore(tmp_path / "sessions")
-    state = SessionState(system="sys", model="grok-4.6", has_api=False)
-    state.notes.append("keep-me")
-    handle_command("/new demo", state, sessions=store)
-    assert state.name == "demo"
-    assert state.notes == []
-    assert "demo" in store.list_names()
-    state.notes.append("later")
-    store.save(state.snapshot())
-    handle_command("/new other", state, sessions=store)
-    opened = handle_command("/open demo", state, sessions=store)
-    assert opened.kind == "open"
-    assert state.name == "demo"
-    assert "later" in state.notes
-    listed = handle_command("/sessions", state, sessions=store)
-    assert "demo" in listed.message
-    forgot = handle_command("/forget demo", state, sessions=store)
-    assert forgot.kind == "forget"
-    assert "demo" not in store.list_names()
-    assert handle_command("/clear", state).kind == "clear"
-    assert store.state_path("other").is_file()
-    assert store.path_for("other").is_dir()
-
-
-def test_session_file_has_no_secrets(tmp_path: Path) -> None:
-    store = SessionStore(tmp_path / "sessions")
-    store.save(
-        {
-            "name": "safe",
-            "model": "grok-4.6",
-            "notes": ["hi"],
-            "messages": [{"role": "user", "content": "hi"}],
-            "api_key": "should-not-be-saved",
-            "Authorization": "Bearer secret",
-        }
-    )
-    raw = store.state_path("safe").read_text(encoding="utf-8")
-    notes = (store.path_for("safe") / "notes.txt").read_text(encoding="utf-8")
-    blob = raw + notes
-    assert "should-not-be-saved" not in blob
-    assert "Bearer" not in blob
-    loaded = store.load("safe")
-    assert loaded is not None
-    assert "api_key" not in loaded
+def test_sessions_readonly_skips_credentials(tmp_path: Path) -> None:
+    home = tmp_path / ".grok"
+    (home / "sessions").mkdir(parents=True)
+    (home / "auth.json").write_text('{"access_token":"do-not-print"}')
+    listed = handle_command("/sessions", SessionState(system="sys", model="grok-4.6", has_api=False))
+    assert listed.kind == "sessions"
+    text = list_official_sessions(home)
+    assert "do-not-print" not in text
+    assert "auth.json" in text
+    assert "(skipped)" in text
 
 
 def test_parse_usage_omits_when_missing() -> None:
@@ -179,90 +147,24 @@ def test_usage_jsonl_append(tmp_path: Path) -> None:
     path = tmp_path / "usage.jsonl"
     append_usage_line(
         {"input_tokens": 2, "output_tokens": 5},
-        session="default",
+        session="api-chat",
         model="grok-4.6",
         path=path,
     )
     row = json.loads(path.read_text(encoding="utf-8").splitlines()[0])
     assert row["input_tokens"] == 2
     assert row["output_tokens"] == 5
-    assert row["session"] == "default"
+    assert row["session"] == "api-chat"
     assert "api_key" not in row
 
 
-def test_plan_hold_and_yn() -> None:
-    state = SessionState(system="sys", model="grok-4.6", has_api=True)
-    held = handle_command("/plan draft this turn", state)
-    assert held.send_text is None
-    assert state.pending_plan == "draft this turn"
-    assert "held" in held.message.lower()
-    assert "pending plan · y/n" in _toolbar(state)
-    blocked = handle_command("oops", state)
-    assert blocked is not None and blocked.send_text is None
-    assert state.pending_plan == "draft this turn"
-    approved = handle_command("y", state)
-    assert approved.kind == "plan_send"
-    assert approved.send_text == "draft this turn"
-    assert state.pending_plan is None
-    assert state.plans_approved == 1
-
-
-def test_plan_n_and_aliases() -> None:
-    state = SessionState(system="sys", model="grok-4.6", has_api=True)
-    handle_command("/plan later", state)
-    cancelled = handle_command("n", state)
-    assert cancelled.kind == "plan_cancel"
-    assert cancelled.send_text is None
-    assert state.pending_plan is None
-    assert state.plans_cancelled == 1
-    handle_command("/plan again", state)
-    assert handle_command("/reject", state).kind == "plan_cancel"
-    handle_command("/plan third", state)
-    assert handle_command("/approve", state).send_text == "third"
-    assert handle_command("/send", state).message == "No pending plan."
-
-
-def test_chat_stays_immediate_while_plan_is_separate() -> None:
-    state = SessionState(system="sys", model="grok-4.6", has_api=True)
-    handle_command("/plan wait", state)
-    chat = handle_command("/chat now", state)
-    assert chat.send_text == "now"
-    assert state.pending_plan is None
-
-
-def test_persist_across_restart(tmp_path: Path) -> None:
-    store = SessionStore(tmp_path / "sessions")
-    state = SessionState(system="sys", model="grok-4.6", has_api=True)
-    state.notes.append("durable-note")
-    state.prompt_id = "grok4"
-    state.total_input = 12
-    state.total_output = 3
-    state.pending_plan = "held across quit"
-    store.save(state.snapshot())
-    assert store.current_name() == "default"
-    assert (tmp_path / "sessions" / "default").is_dir()
-
-    restarted = SessionState(system="fresh", model="other", has_api=True)
-    loaded = store.load(store.current_name() or "")
-    assert loaded is not None
-    restarted.load_snapshot(loaded)
-    assert restarted.notes == ["durable-note"]
-    assert restarted.model == "grok-4.6"
-    assert restarted.prompt_id == "grok4"
-    assert restarted.total_input == 12
-    assert restarted.total_output == 3
-    assert restarted.pending_plan == "held across quit"
-
-
-def test_audit_plan_events(tmp_path: Path) -> None:
-    path = tmp_path / "usage.jsonl"
-    append_audit_line("plan-approved", session="default", path=path)
-    append_audit_line("plan-cancelled", session="default", path=path)
-    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
-    assert rows[0]["event"] == "plan-approved"
-    assert rows[1]["event"] == "plan-cancelled"
-    assert "hours" not in rows[0]
-    assert "input_tokens" not in rows[0]
+def test_toolbar_is_grok_bot_companion() -> None:
+    state = SessionState(system="sys", model="grok-4.6", has_api=False)
+    bar = _toolbar(state)
+    assert "grok-bot-tui" in bar
+    assert "Grok Bot companion" in bar
+    assert "Grok GUI companion" not in bar
+    assert "/grok" in bar
 
 
 def test_model_switch() -> None:
