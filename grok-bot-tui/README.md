@@ -12,7 +12,7 @@ not the official `grok` CLI (`curl -fsSL https://x.ai/cli/install.sh | bash`).
 | **`grok-tui-shell`** | Fullscreen TUI around that GUI: same sign-in, same bot roster, keyboard navigation. Commands `grok-tui-shell` and `grok-bot-tui` are aliases. |
 | **`grok` CLI** | Separate official product. Device/OIDC at `accounts.x.ai`. This shell does **not** call `grok login`. |
 
-Package: `grok-bot-tui` 0.7.1. Python 3.9+ (Pi 3 Bookworm / Ubuntu 20.04+).
+Package: `grok-bot-tui` 0.7.2. Python 3.9+ (Pi 3 Bookworm / Ubuntu 20.04+).
 License: MIT (this packaging tree). Targets: Ubuntu, Kali Linux, Rocky Linux,
 and Raspberry Pi OS / Ubuntu on Raspberry Pi (x86_64, aarch64, armv7l).
 
@@ -53,7 +53,8 @@ and Raspberry Pi OS / Ubuntu on Raspberry Pi (x86_64, aarch64, armv7l).
 - One-row color pixel sprites (`▀` with truecolor / 256-color fg+bg) hashed
   from each bot id. Narrow terminals collapse to a colored `[A]`.
 - `j` / `k` or arrow keys move; Enter opens **in-terminal** chat with that bot.
-  Replies stream in the TUI. No GUI is launched for chat.
+  Replies stream in the TUI. No GUI is launched for chat. `Esc` or `←` (empty
+  compose) returns to the bot list; chat also shows a `< Back` control.
 
 ## What it does not do
 
@@ -64,7 +65,7 @@ and Raspberry Pi OS / Ubuntu on Raspberry Pi (x86_64, aarch64, armv7l).
 - It does **not** list public x.ai/bot marketing templates (Sales Outbound,
   Talent Scout, …) as if they were your session. If you still see those, you
   are on a stale install (0.3.0 or older). Reinstall and restart; header must
-  show **0.7.1**.
+  show **0.7.2**.
 - It does **not** call the official `grok` CLI or `grok login --device-auth`.
 - It cannot list bots that grok-bot has never synced to disk. Open grok-bot
   once, then `/agents`.
@@ -112,7 +113,7 @@ python3 -m pip install --user -e "./grok-bot-tui[dev]"
 
 ```bash
 python3 -m pip show grok-bot-tui
-# Version: 0.7.1
+# Version: 0.7.2
 ```
 
 Install grok-bot itself on **x86_64** so `/login` can launch the GUI:
@@ -217,7 +218,7 @@ grok-tui-shell --json status
 Fullscreen, five rows of chrome:
 
 ```text
-Grok GUI TUI shell  0.7.1                          ← header (reverse)
+Grok GUI TUI shell  0.7.2                          ← header (reverse)
 Bots  (N from signed-in Grok Bot)                  ← body
 > ▀▀▀▀  Night Watch             2 unread · …
   ▀▀▀▀  Ops                     queue
@@ -320,6 +321,17 @@ On the bot list, with `compose>` **empty**:
 | `Enter` | Select the highlighted bot |
 | `Ctrl-C` `Ctrl-D` `Ctrl-Q` | Quit |
 
+On chat, with `compose>` **empty**:
+
+| Key | Action |
+| --- | --- |
+| `Esc` | Back to the bot list (`< Back`) |
+| `←` | Back to the bot list |
+| `Esc` with a draft | Clear `compose>` first; a second `Esc` leaves chat |
+
+`/back` (or `/bots`) does the same from any compose text. `/agents` also
+returns to the list and reloads the roster.
+
 Typed lines:
 
 | Input | Action |
@@ -329,6 +341,7 @@ Typed lines:
 | `/logout` | Sign this TUI out. Desktop session is unchanged. |
 | `/whoami` | `signed in  Grok Bot GUI session` or truncated key label. |
 | `/agents` | Reload bots from the Grok Bot roster cache. |
+| `/back` `/bots` | Leave chat and return to the bot list (no roster reload). |
 | `/gui` | Launch packaged grok-bot (x86_64). |
 | `/chat` [`<text>`] | Open the chat view (or send if text is given). |
 | `/model` [`<id>`] | Show or set the optional api.x.ai model id. |
@@ -346,9 +359,10 @@ Typed lines:
 
 Chat stays in this terminal and uses **Grok Bot credentials** (the same
 session grok-bot stores), not an xAI API key. Selecting a bot (Enter)
-opens chat here. Messages go to Grok Bot (`aiserver.v1.GrokBotService`) as
-that teammate. Replies appear in the transcript (`you:` / `bot:`). History
-stays until `/clear`.
+opens chat here. The chat pane shows `< Back` at the top; `Esc` or `←` (empty
+compose) or `/back` returns to the bot list. Messages go to Grok Bot
+(`aiserver.v1.GrokBotService`) as that teammate. Replies appear in the
+transcript (`you:` / `bot:`). History stays until `/clear`.
 
 Chat **never** launches a GUI and **never** uses `XAI_API_KEY` / `/login-key`.
 
@@ -476,7 +490,7 @@ Examples use `$HOME` and `/opt/grok-bot` only.
 
 | Symptom | What to do |
 | --- | --- |
-| Header `0.3.0` and bots named Sales Outbound / Talent Scout / Chief of Staff | Stale install. `./grok-bot-tui/install.sh --yes`, quit the TUI, run `grok-tui-shell` again. Header must be **0.7.1** and the list heading must say `from signed-in Grok Bot`. |
+| Header `0.3.0` and bots named Sales Outbound / Talent Scout / Chief of Staff | Stale install. `./grok-bot-tui/install.sh --yes`, quit the TUI, run `grok-tui-shell` again. Header must be **0.7.2** and the list heading must say `from signed-in Grok Bot`. |
 | Signed out even though grok-bot is signed in | `/login`, or check `$HOME/.grokbot/settings.json` exists for this user. `XDG_CONFIG_HOME` must match the desktop. |
 | `No bots in the Grok Bot cache yet` | Open grok-bot so it writes `sand-client-persistence`, then `/agents`. |
 | List does not match the GUI | `/agents`. Hidden bots stay hidden. Pin order follows the GUI. |

@@ -98,7 +98,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Commands: tui (default), version, whoami, bots, status, chat. "
             "This is not Grok."
         ),
-        epilog="TUI slash commands: /login /logout /whoami /agents /chat /gui /help /quit. Chat never launches a GUI.",
+        epilog="TUI slash commands: /login /logout /whoami /agents /back /chat /gui /help /quit. Esc or ← leaves chat for the bot list. Chat never launches a GUI.",
     )
     parser.add_argument(
         "--api-key",

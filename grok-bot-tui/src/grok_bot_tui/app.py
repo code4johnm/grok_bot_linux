@@ -49,6 +49,9 @@ NEED_BOT_MSG = (
     "Could not read Grok Bot credentials. Chat uses the same session as grok-bot."
 )
 
+BACK_BUTTON = "< Back"
+BACK_KEYS_HINT = "Esc / ←  back to bots"
+
 HELP = f"""{TITLE}
 Companion TUI for Grok Bot. Chat stays in this terminal. This is not Grok.
 
@@ -58,6 +61,8 @@ Companion TUI for Grok Bot. Chat stays in this terminal. This is not Grok.
   /agents         Refresh bots from the signed-in Grok Bot roster
   j / k  or ↑↓    Move selection (bot list)
   Enter           Chat with the selected bot in this TUI
+  Esc / ←         Back to the bot list (chat view)
+  /back           Back to the bot list
   <text>          Send a message to that Grok Bot in this terminal
   /gui            Optional desktop (never used for chat)
   /clear          Clear the transcript
@@ -183,12 +188,27 @@ def render_agent_list(state: SessionState, *, terminal_width: int | None = None)
     return "\n".join(lines)
 
 
+def render_chat(state: SessionState) -> str:
+    """Chat pane with a keyboard-activated back control to the bot list."""
+    r, g, b = RED
+    button = f"\033[38;2;{r};{g};{b}m{BACK_BUTTON}\033[0m"
+    return "\n".join(
+        [
+            f"{button}   {BACK_KEYS_HINT}",
+            "",
+            render_transcript(state),
+            "",
+            BACK_KEYS_HINT,
+        ]
+    )
+
+
 def render_screen(state: SessionState) -> str:
     if state.auth_state != "signed_in":
         return render_signin(state)
     if state.view == "agents":
         return render_agent_list(state)
-    return f"{render_header(state)}\n{render_transcript(state)}\n{render_footer(state)}"
+    return f"{render_header(state)}\n{render_chat(state)}\n{render_footer(state)}"
 
 
 def render_body(state: SessionState, *, terminal_width: int | None = None) -> str:
@@ -203,7 +223,7 @@ def render_body(state: SessionState, *, terminal_width: int | None = None) -> st
         if lines and lines[-1] == render_footer(state):
             lines = lines[:-1]
         return "\n".join(lines).rstrip()
-    return render_transcript(state)
+    return render_chat(state)
 
 
 def handle_command(line: str, state: SessionState) -> CommandResult:
@@ -250,6 +270,11 @@ def handle_command(line: str, state: SessionState) -> CommandResult:
         return CommandResult("whoami")
     if name == "/agents":
         return CommandResult("agents")
+    if name in ("/back", "/bots"):
+        if state.auth_state != "signed_in":
+            return CommandResult("login")
+        state.view = "agents"
+        return CommandResult("back")
     if name == "/model":
         if arg:
             state.model = arg
@@ -557,6 +582,10 @@ def run_shell(
             else:
                 emit("")
             return True
+        if result.kind == "back":
+            state.view = "agents"
+            emit("")
+            return True
         if result.kind == "agent_down":
             if state.agents:
                 state.agent_index = (state.agent_index + 1) % len(state.agents)
@@ -634,6 +663,11 @@ def run_shell(
         and state.view == "agents"
         and not compose.text
     )
+    chat_back = Condition(
+        lambda: state.auth_state == "signed_in"
+        and state.view == "chat"
+        and not compose.text
+    )
 
     @kb.add("c-c")
     @kb.add("c-d")
@@ -660,6 +694,21 @@ def run_shell(
     @kb.add("j", filter=list_nav)
     def _down(event: object) -> None:
         apply_line("j")
+        event.app.invalidate()  # type: ignore[attr-defined]
+
+    @kb.add("escape")
+    def _escape(event: object) -> None:
+        if compose.text:
+            compose.reset()
+            event.app.invalidate()  # type: ignore[attr-defined]
+            return
+        if state.auth_state == "signed_in" and state.view == "chat":
+            apply_line("/back")
+            event.app.invalidate()  # type: ignore[attr-defined]
+
+    @kb.add("left", filter=chat_back)
+    def _left_back(event: object) -> None:
+        apply_line("/back")
         event.app.invalidate()  # type: ignore[attr-defined]
 
     def header_text() -> ANSI:

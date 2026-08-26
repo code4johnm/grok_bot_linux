@@ -11,9 +11,12 @@ import pytest
 
 from grok_bot_tui import DEFAULT_BOT, PROG, TITLE
 from grok_bot_tui.app import (
+    BACK_BUTTON,
+    BACK_KEYS_HINT,
     HELP,
     SessionState,
     handle_command,
+    render_chat,
     render_footer,
     render_header,
     render_screen,
@@ -76,11 +79,17 @@ def test_layout_is_one_thread() -> None:
     assert "shell" in render_footer(state)
     assert render_transcript(state) == "(no messages)"
     assert "Grok GUI TUI shell" in screen
+    assert BACK_BUTTON in screen
+    assert BACK_KEYS_HINT in screen
     state.messages.append({"role": "user", "content": "hi"})
     state.messages.append({"role": "assistant", "content": "hello"})
     body = render_transcript(state)
     assert "you: hi" in body
     assert "bot: hello" in body
+    chat = render_chat(state)
+    assert chat.splitlines()[0].endswith(BACK_KEYS_HINT)
+    assert BACK_BUTTON in chat
+    assert "you: hi" in chat
 
 
 def test_gui_launches_desktop_on_x86_never_grok_com(tmp_path: Path) -> None:
@@ -147,6 +156,8 @@ def test_commands_gui_clear_quit_help_bot_chat() -> None:
     assert "/gui" in help_result.message
     assert "/login" in help_result.message
     assert "/agents" in help_result.message
+    assert "/back" in help_result.message
+    assert "Esc / ←" in help_result.message
     assert "This is not Grok" in help_result.message
     assert "Grok GUI companion" not in help_result.message
     assert handle_command("/clear", state).kind == "clear"
@@ -231,6 +242,20 @@ def test_send_chat_stays_in_terminal() -> None:
     assert state.streaming is False
 
 
+def test_back_from_chat_to_agents() -> None:
+    state = _state(has_api=True)
+    state.auth_state = "signed_in"
+    state.view = "chat"
+    state.messages.append({"role": "user", "content": "hi"})
+    result = handle_command("/back", state)
+    assert result.kind == "back"
+    assert state.view == "agents"
+    assert any(item.get("content") == "hi" for item in state.messages)
+    assert handle_command("/bots", state).kind == "back"
+    signed_out = _state(has_api=False)
+    assert handle_command("/back", signed_out).kind == "login"
+
+
 def test_chat_without_key() -> None:
     state = _state(has_api=False)
     result = handle_command("hello", state)
@@ -260,7 +285,7 @@ def test_package_is_not_grok() -> None:
     assert "does **not** read Cookies" in readme
     assert "does **not** call the official `grok` CLI" in readme
     assert "Sales Outbound" in readme  # documented as stale-install symptom only
-    assert "0.7.1" in readme
+    assert "0.7.2" in readme
     assert "Chat stays in this terminal" in readme or "chat stays" in readme.lower()
     assert "Raspberry Pi" in readme
     assert "install.sh" in readme
