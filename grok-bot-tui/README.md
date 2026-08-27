@@ -76,8 +76,8 @@ and Raspberry Pi OS / Ubuntu on Raspberry Pi (x86_64, aarch64, armv7l).
 | --- | --- |
 | Python | 3.9 or newer (3.11+ preferred) |
 | Terminal | UTF-8 locale. OSC 8 hyperlinks work in VTE, Kitty, iTerm2, Windows Terminal, and similar. The raw URL is always printed too. SSH and headless Pi: use CLI commands or tmux. |
-| Grok Bot desktop | Needed for GUI sign-in and the roster. **x86_64 only.** Install with `./install.sh` or `scripts/install-ubuntu.sh` / `install-rocky.sh` / `install-kali.sh`. Prefix: `/opt/grok-bot` (system) or `$HOME/.local/opt/grok-bot` (user). |
-| Raspberry Pi / ARM | TUI + CLI run on Pi 3/4/5 (`armv7l`, `aarch64`). No Electron grok-bot tarball; `/gui` and `/login` launch will say so. Use `grok-tui-shell status`. |
+| Grok Bot desktop | Needed for GUI sign-in and the roster. Linux: **x86_64** community port (`./install.sh`), version-matched to official macOS. Official **macOS** (arm64 + Intel): `scripts/install-macos.sh`. |
+| Raspberry Pi / ARM | TUI + CLI run on Pi 3/4/5 (`armv7l`, `aarch64`). No Linux Electron tarball; `/gui` and `/login` launch will say so. Use `grok-tui-shell status`. Official macOS Apple Silicon is supported. |
 
 Python deps (from `pyproject.toml`): `httpx`, `prompt_toolkit`. Optional:
 `pytest` (`[dev]`), `keyring` (API-key store only).
@@ -455,9 +455,11 @@ These flags affect optional api.x.ai `/chat` only.
 | `GROK_BOT_TUI_HOME` | TUI data dir (ignore-flag, usage.jsonl). Default `$HOME/.grok-bot-tui`. |
 | `XDG_DATA_HOME` | If `GROK_BOT_TUI_HOME` is unset: `$XDG_DATA_HOME/grok-bot-tui`. |
 | `XDG_CONFIG_HOME` | Electron profile parent (`…/Grok Bot`) and TUI credentials parent. |
-| `GROK_BOT_DATA` | GUI settings dir. Default `$HOME/.grokbot`. |
-| `GROK_BOT_HOME` | Directory containing the `grok-bot` binary. |
+| `GROK_BOT_DATA` | GUI settings dir. Default `$HOME/.grokbot` (Linux) or the Electron user-data dir on macOS. |
+| `GROK_BOT_CONFIG` | Override Electron profile dir (`Grok Bot` / `com.anysphere.sand`). |
+| `GROK_BOT_HOME` | Directory containing the `grok-bot` binary or `Grok Bot.app`. |
 | `GROK_BOT_TUI_ARCH` | Override `platform.machine()` for desktop-arch checks. |
+| `GROK_BOT_TUI_OS` | Override host OS (`linux`, `macos`) for desktop + session paths. |
 | `GROK_BOT_ACCESS_TOKEN` | Override session token (tests). Chat otherwise decrypts grok-bot’s store. |
 | `GROK_BOT_SECRETS` | Override path to `sand-secrets.json`. |
 | `GROK_TUI_NO_ELECTRON` | Set to `1` to skip the grok-bot helper (unit tests). |
@@ -469,8 +471,9 @@ Examples use `$HOME` and `/opt/grok-bot` only.
 
 | Path | Who writes it | What |
 | --- | --- | --- |
-| `$HOME/.config/Grok Bot/` | grok-bot | Electron user-data. Roster cache in `sand-client-persistence/`. Session in `sand-secrets.json`. **Do not copy Cookies.** |
-| `$HOME/.grokbot/settings.json` | grok-bot | Onboarding / account-scope markers. |
+| `$HOME/.config/Grok Bot/` | grok-bot (Linux) | Electron user-data. Roster cache in `sand-client-persistence/`. Session in `sand-secrets.json`. **Do not copy Cookies.** |
+| `$HOME/Library/Application Support/Grok Bot/` | grok-bot (macOS) | Official app profile (`com.anysphere.sand` is also checked). |
+| `$HOME/.grokbot/settings.json` | grok-bot | Onboarding / account-scope markers (Linux). |
 | `$HOME/.grok-bot-tui/ignore-gui-session` | this TUI | `/logout` opt-out. |
 | `$HOME/.grok-bot-tui/usage.jsonl` | this TUI | Optional API token counts. |
 | `$HOME/.config/grok-bot-tui/config.json` | this TUI | Non-secret defaults (model, timeout, base_url). Created by `install.sh`. |

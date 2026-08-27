@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Dispatcher: Install Grok Bot for ubuntu|rocky|kali
-# Detection (auto): /etc/os-release
-#   1. ID=kali or ID_LIKE contains kali → install-kali.sh
-#   2. ID=ubuntu|debian|linuxmint (and not kali) → install-ubuntu.sh
-#   3. ID=rocky or ID_LIKE contains rhel/centos → install-rocky.sh
+# Dispatcher: Install Grok Bot for ubuntu|rocky|kali|macos
+# Detection (auto):
+#   Darwin → install-macos.sh
+#   else /etc/os-release:
+#     1. ID=kali or ID_LIKE contains kali → install-kali.sh
+#     2. ID=ubuntu|debian|linuxmint (and not kali) → install-ubuntu.sh
+#     3. ID=rocky or ID_LIKE contains rhel/centos → install-rocky.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/common.sh
@@ -24,6 +26,9 @@ done
 
 detect_target() {
   local id like
+  case "$(host_os)" in
+    macos) echo macos; return ;;
+  esac
   id="$(os_id)"
   like=" $(os_id_like) "
   if [[ "$id" == "kali" || "$like" == *" kali "* ]]; then
@@ -61,28 +66,34 @@ case "$TARGET" in
   kali)
     exec "$ROOT/scripts/install-kali.sh" "$@"
     ;;
+  macos|darwin|osx|mac)
+    exec "$ROOT/scripts/install-macos.sh" "$@"
+    ;;
   auto|"")
     case "$(detect_target)" in
+      macos)  exec "$ROOT/scripts/install-macos.sh" "$@" ;;
       kali)   exec "$ROOT/scripts/install-kali.sh" "$@" ;;
       ubuntu) exec "$ROOT/scripts/install-ubuntu.sh" "$@" ;;
       rocky)  exec "$ROOT/scripts/install-rocky.sh" "$@" ;;
       *)
-        die "cannot auto-detect a first-class target from /etc/os-release. Pass ubuntu, rocky, or kali."
+        die "cannot auto-detect a first-class target. Pass ubuntu, rocky, kali, or macos."
         ;;
     esac
     ;;
   -h|--help)
     cat <<EOF
-Usage: $0 ubuntu|rocky|kali|auto [install flags]
+Usage: $0 ubuntu|rocky|kali|macos|auto [install flags]
 
-  ubuntu   Ubuntu LTS x86_64 (Debian/Mint reuse)
-  rocky    Rocky Linux 9/10 x86_64 (RHEL/Alma reuse)
-  kali     Kali Linux x86_64 (Debian/rolling, not Ubuntu)
-  auto     /etc/os-release: kali, then ubuntu/debian/mint, then rocky/rhel
+  ubuntu    Ubuntu LTS x86_64 (Debian/Mint reuse)
+  rocky     Rocky Linux 9/10 x86_64 (RHEL/Alma reuse)
+  kali      Kali Linux x86_64 (Debian/rolling, not Ubuntu)
+  macos     Official Grok Bot .dmg (Apple Silicon + Intel)
+  auto      Darwin → macos, else /etc/os-release
 
-System prefix on every dist: /opt/grok-bot
+Linux system prefix: /opt/grok-bot
+Linux desktop tarball tracks the official macOS version (Cursor product sand).
 
-Flags are passed through (--system, --user, --with-cli, ...).
+Flags are passed through (--system, --user, --with-cli, --download-only, ...).
 
   --tui-only   Install grok-bot-tui only (no Electron). Safe on aarch64.
                Same as scripts/install-tui.sh
@@ -90,6 +101,6 @@ EOF
     exit 0
     ;;
   *)
-    die "unknown target: $TARGET (use ubuntu, rocky, or kali)"
+    die "unknown target: $TARGET (use ubuntu, rocky, kali, or macos)"
     ;;
 esac

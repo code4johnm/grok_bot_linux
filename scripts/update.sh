@@ -403,6 +403,10 @@ if [[ "$CHECK_ONLY" -eq 1 ]]; then
   echo "grok_bot_linux  local=${WRAPPER_LOCAL:0:12}  latest=${WRAPPER_REMOTE:0:12}  $([[ "$WRAPPER_NEED" -eq 1 ]] && echo UPDATE || echo ok)"
   echo "Grok Bot        local=$APP_LOCAL  latest=$APP_REMOTE  $([[ "$APP_NEED" -eq 1 ]] && echo UPDATE || echo ok)"
   echo "dependencies    refresh on update (apt/dnf/pacman)"
+  if [[ -x "$ROOT/scripts/check-official.sh" ]]; then
+    echo "official:"
+    "$ROOT/scripts/check-official.sh" || true
+  fi
   if [[ "$WRAPPER_NEED" -eq 1 || "$APP_NEED" -eq 1 ]]; then
     exit 2
   fi

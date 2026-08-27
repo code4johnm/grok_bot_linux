@@ -7,7 +7,7 @@ if [[ -z "${ROOT:-}" ]]; then
   ROOT="$(cd "$_COMMON_DIR/.." && pwd)"
 fi
 
-VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION" 2>/dev/null || echo 0.24.0)"
+VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION" 2>/dev/null || echo 0.27.0)"
 APP_NAME="Grok Bot"
 APP_ID="grok-bot"
 DEFAULT_OPT_DIR="${GROK_BOT_HOME:-$HOME/.local/opt/grok-bot}"
@@ -35,6 +35,7 @@ UPSTREAM_LATEST_API="https://api.github.com/repos/${UPSTREAM_REPO}/releases/late
 CACHE_DIR="${GROK_BOT_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/grok-bot}"
 
 KNOWN_UPSTREAM_SHA256_0_24_0="f6b6495f9398a9d60702a282b404ac52e2b1c1c345d3ba81bbbd242e49ea6aad"
+KNOWN_UPSTREAM_SHA256_0_27_0="4302bd55c2350c33c551e58a7bdb7863b6bcfaf127ea79334ec0be242dcdbbf7"
 
 set_upstream_version() {
   VERSION="$(ver_norm "${1:-$VERSION}")"
@@ -42,6 +43,7 @@ set_upstream_version() {
   UPSTREAM_TARBALL="Grok_Bot_${VERSION}_linux_x64.tar.gz"
   UPSTREAM_URL="https://github.com/${UPSTREAM_REPO}/releases/download/${UPSTREAM_TAG}/${UPSTREAM_TARBALL}"
   case "$VERSION" in
+    0.27.0) UPSTREAM_SHA256="$KNOWN_UPSTREAM_SHA256_0_27_0" ;;
     0.24.0) UPSTREAM_SHA256="$KNOWN_UPSTREAM_SHA256_0_24_0" ;;
     *)      UPSTREAM_SHA256="" ;;
   esac
@@ -63,6 +65,110 @@ ver_gt() {
 }
 
 set_upstream_version "$VERSION"
+
+# Official Grok Bot (Cursor product name "sand"). Linux uses the community
+# port of that same desktop version; macOS is the vendor version signal.
+OFFICIAL_APP="sand"
+OFFICIAL_UPDATE_API_BASE="https://api2.cursor.sh/updates/api/update"
+DOWNLOADS_CDN="https://downloads.cursor.com"
+PLATFORMS_JSON="${ROOT}/share/platforms.json"
+OFFICIAL_PINNED_VERSION="0.27.0"
+
+host_os() {
+  local sys
+  sys="$(uname -s 2>/dev/null || echo unknown)"
+  case "$sys" in
+    Darwin) echo macos ;;
+    *) echo linux ;;
+  esac
+}
+
+official_cpu() {
+  local m
+  m="$(uname -m 2>/dev/null || echo x86_64)"
+  case "$m" in
+    arm64|aarch64) echo arm64 ;;
+    x86_64|amd64|i686|i386) echo x64 ;;
+    *) echo "$m" ;;
+  esac
+}
+
+macos_update_platform() {
+  local cpu="${1:-$(official_cpu)}"
+  printf 'darwin-%s\n' "$cpu"
+}
+
+macos_dmg_url() {
+  local cpu="$1" ver="$2"
+  ver="$(ver_norm "$ver")"
+  case "$cpu" in
+    arm64)
+      printf '%s\n' "${DOWNLOADS_CDN}/sand/stable/darwin-arm64/${ver}/Grok_Bot_${ver}.dmg"
+      ;;
+    x64)
+      printf '%s\n' "${DOWNLOADS_CDN}/sand/stable/darwin-x64/${ver}/Grok_Bot_${ver}_x64.dmg"
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+macos_artifact_name() {
+  local cpu="$1" ver="$2"
+  ver="$(ver_norm "$ver")"
+  case "$cpu" in
+    arm64) printf 'Grok_Bot_%s.dmg\n' "$ver" ;;
+    x64) printf 'Grok_Bot_%s_x64.dmg\n' "$ver" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Print version<TAB>url for the official macOS updater. That version is what
+# the Linux community port tracks. Linux official channel returns 204.
+latest_macos_release() {
+  local cpu="${1:-arm64}" plat url
+  plat="$(macos_update_platform "$cpu")"
+  url="${OFFICIAL_UPDATE_API_BASE}/${plat}/${OFFICIAL_APP}/0.0.0/stable"
+  have python3 || return 1
+  http_get "$url" | python3 -c '
+import json, sys
+raw = sys.stdin.read().strip()
+if not raw:
+    sys.exit("no official macOS build")
+d = json.loads(raw)
+ver = (d.get("name") or d.get("version") or d.get("productVersion") or "").lstrip("v")
+url = d.get("url") or ""
+if not ver or not url:
+    sys.exit("could not parse official macOS update API")
+print(f"{ver}\t{url}")
+'
+}
+
+# Back-compat name used by install-macos.sh
+official_named_url() {
+  local os="$1" cpu="$2" ver="$3"
+  case "$os" in
+    macos|darwin) macos_dmg_url "$cpu" "$ver" ;;
+    *) return 1 ;;
+  esac
+}
+
+official_artifact_name() {
+  local os="$1" cpu="$2" ver="$3"
+  case "$os" in
+    macos|darwin) macos_artifact_name "$cpu" "$ver" ;;
+    *) return 1 ;;
+  esac
+}
+
+latest_official_release() {
+  local os="${1:-macos}" cpu="${2:-arm64}"
+  case "$os" in
+    macos|darwin) latest_macos_release "$cpu" ;;
+    *) return 1 ;;
+  esac
+}
 
 log()  { printf '%s\n' "$*"; }
 info() { printf '==> %s\n' "$*"; }

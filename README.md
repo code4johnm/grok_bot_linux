@@ -1,7 +1,8 @@
 # Grok Bot Linux (Ubuntu LTS + Rocky Linux + Kali)
 
-Stand-alone packaging for **two** products on **three first-class OS
-targets** (x86_64):
+Stand-alone packaging for **two** products on **three first-class Linux
+targets** (x86_64). The Linux desktop tarball tracks the official **macOS**
+Grok Bot version:
 
 | Role | OS | Installer |
 | --- | --- | --- |
@@ -10,6 +11,7 @@ targets** (x86_64):
 | Primary Debian-family rolling | **Kali Linux** | `scripts/install-kali.sh` |
 | Ubuntu cousins | Debian, Linux Mint | `install-ubuntu.sh` |
 | Rocky cousins | RHEL, AlmaLinux | `install-rocky.sh` |
+| Official macOS app (version source) | **macOS** 12+ (arm64 + Intel) | `scripts/install-macos.sh` |
 | Notes only | Fedora | — |
 
 **Install prefix on every dist (system):** `/opt/grok-bot`  
@@ -21,9 +23,10 @@ sandbox rules stay on the matching script.
 
 | Product | What it is | How it is installed |
 | --- | --- | --- |
-| **Grok Bot desktop** | Official teammate / virtual-computer GUI from https://x.ai/bot | Community Linux port (no official vendor `.deb`) |
+| **Grok Bot desktop (Linux)** | Official teammate / virtual-computer GUI from https://x.ai/bot | Community Linux port of the official macOS desktop version (currently **0.27.0**) |
+| **Grok Bot desktop (macOS)** | Same product, vendor build from Cursor (`sand`) | `scripts/install-macos.sh` |
 | **Grok CLI** | Official native Linux agent / Grok Build | `curl -fsSL https://x.ai/cli/install.sh \| bash` |
-| **grok-tui-shell** (`grok-bot-tui`) | Terminal shell for **Grok Bot** (the Electron GUI — not grok.com chat, not the `grok` CLI). `/login` uses the same sign-in as grok-bot and lists **your** roster. `/gui` launches the desktop on x86_64. | `./scripts/install-tui.sh` or `pip install -e ./grok-bot-tui` — full guide: [grok-bot-tui/README.md](grok-bot-tui/README.md) |
+| **grok-tui-shell** (`grok-bot-tui`) | Terminal shell for **Grok Bot** (the Electron GUI — not grok.com chat, not the `grok` CLI). `/login` uses the same sign-in as grok-bot and lists **your** roster. `/gui` launches the desktop on x86_64 Linux and on the official macOS app. | `./scripts/install-tui.sh` or `pip install -e ./grok-bot-tui` — full guide: [grok-bot-tui/README.md](grok-bot-tui/README.md) |
 
 The desktop app is a GUI around the same ecosystem. It does **not** replace the
 CLI. Install both.
@@ -31,7 +34,7 @@ CLI. Install both.
 **Official support status.** xAI/Cursor do not currently ship a native Linux
 `.deb` or `.rpm` for Grok Bot desktop. This tree uses the public
 [community Linux port](https://github.com/Nichokas/grokbot-linux-port) of the
-official Windows package fused with Electron for Linux. The CLI **is** official
+same desktop version as the official macOS app. The CLI **is** official
 and supports Linux x86_64 and arm64.
 
 **Architecture.** Desktop: **x86_64 only**. CLI: x86_64 and aarch64. There is
@@ -148,16 +151,50 @@ a normal user.
 
 **Debian / Mint:** `./scripts/install-ubuntu.sh`.
 
+## macOS (official)
+
+Vendor `.dmg` from `downloads.cursor.com` (internal product name `sand`).
+The public [x.ai/bot](https://x.ai/bot) button may still advertise an older
+build; the in-app updater and Homebrew cask `grok-bot` track the live
+channel (`0.27.0` as of 2026-08-26).
+
+On a Mac:
+
+```bash
+./scripts/install-for.sh macos
+# or: brew install --cask grok-bot
+open -a "Grok Bot"
+```
+
+From Linux (download only):
+
+```bash
+./scripts/install-macos.sh --download-only --arch arm64
+./scripts/install-macos.sh --download-only --arch x64
+```
+
+Apple Silicon DMG:
+`https://downloads.cursor.com/sand/stable/darwin-arm64/<ver>/Grok_Bot_<ver>.dmg`
+
+Intel DMG:
+`https://downloads.cursor.com/sand/stable/darwin-x64/<ver>/Grok_Bot_<ver>_x64.dmg`
+
+`./scripts/check-official.sh` compares that macOS version to the Linux
+community port pinned in `VERSION` (currently 0.27.0).
+
 Optional packages:
 
 ```bash
 ./scripts/build-deb.sh    # Ubuntu/Debian amd64
 ./scripts/build-rpm.sh    # Rocky/RHEL x86_64
-sudo apt install ./dist/grok-bot_0.24.0_amd64.deb
-sudo dnf install ./dist/grok-bot-0.24.0-1.*.rpm
+sudo apt install ./dist/grok-bot_0.27.0_amd64.deb
+sudo dnf install ./dist/grok-bot-0.27.0-1.*.rpm
 ```
 
 Do **not** install the macOS `.dmg` in Docker as a Linux implementation.
+Use `scripts/install-macos.sh` on a Mac (or `--download-only` to fetch the
+official disk image). Live versions: `share/platforms.json` and
+`./scripts/check-official.sh`.
 
 ## Ubuntu vs Rocky vs Kali
 
@@ -404,16 +441,19 @@ Not available from the community port. Use the official CLI on aarch64.
 Canonical path other agents should call:
 
 ```text
-Install Grok Bot for ubuntu|rocky|kali
+Install Grok Bot for ubuntu|rocky|kali|macos
 
 ./scripts/install-for.sh ubuntu --system --with-cli
 ./scripts/install-for.sh rocky  --system --with-cli
 ./scripts/install-for.sh kali   --system --with-cli
+./scripts/install-for.sh macos
 ./scripts/install-for.sh auto   --system --with-cli
+./scripts/check-official.sh
 ```
 
-Detection (`auto`): `/etc/os-release` — kali (`ID` or `ID_LIKE`) first, then
-ubuntu/debian/linuxmint, then rocky/rhel/centos. Prefix: `/opt/grok-bot`.
+Detection (`auto`): Darwin → macos, else `/etc/os-release` — kali (`ID` or
+`ID_LIKE`) first, then ubuntu/debian/linuxmint, then rocky/rhel/centos.
+Linux prefix: `/opt/grok-bot`.
 
 CLI only:
 
@@ -421,8 +461,11 @@ CLI only:
 ./scripts/install-cli.sh
 ```
 
-Do not wrap the macOS DMG. Do not scrape extra app bits beyond the public
-Linux port. Do not embed credentials. Do not change sudoers without asking.
+Do not use the macOS DMG as a Linux payload. Linux still installs the
+community port tarball, which tracks the official macOS version. Fetch the
+vendor DMG with `install-macos.sh` only on a Mac (or `--download-only`).
+Do not scrape extra app bits. Do not embed credentials. Do not change
+sudoers without asking.
 
 ## Docker (optional)
 

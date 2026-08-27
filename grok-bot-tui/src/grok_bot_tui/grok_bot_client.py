@@ -116,7 +116,7 @@ class GrokBotClient:
         *,
         timeout: float = 120.0,
         base_url: str = DEFAULT_BOT_API,
-        client_version: str = "0.24.0",
+        client_version: str = "0.27.0",
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self.model = "grok-bot"

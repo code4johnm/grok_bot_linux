@@ -1,0 +1,31 @@
+{
+  "product": "Grok Bot",
+  "internal_app": "sand",
+  "bundle_id": "com.anysphere.sand",
+  "homepage": "https://x.ai/bot",
+  "news": "https://x.ai/news/introducing-grok-bot",
+  "desktop_version": "0.27.0",
+  "update_api": "https://api2.cursor.sh/updates/api/update/darwin-arm64/sand/0.0.0/stable",
+  "cdn": "https://downloads.cursor.com",
+  "macos": {
+    "min_os": "12.0",
+    "brew_cask": "grok-bot",
+    "app_name": "Grok Bot.app",
+    "arm64": {
+      "dmg": "https://downloads.cursor.com/sand/stable/darwin-arm64/{version}/Grok_Bot_{version}.dmg",
+      "sha256_0_27_0": "1dc4cce3bb8ce35e90c481f8fb1d27ddfe351685b9abbed7638298742ec5d866"
+    },
+    "x64": {
+      "dmg": "https://downloads.cursor.com/sand/stable/darwin-x64/{version}/Grok_Bot_{version}_x64.dmg",
+      "sha256_0_27_0": "dd45d1efdcc2ae42c9dd629640cbd4a62f53109afab3dd64b576a45a96cdfd6b"
+    }
+  },
+  "linux": {
+    "note": "Community port tracks the official macOS desktop version. No vendor .deb/.rpm.",
+    "upstream": "Nichokas/grokbot-linux-port",
+    "x64": {
+      "tarball": "https://github.com/Nichokas/grokbot-linux-port/releases/download/v{version}/Grok_Bot_{version}_linux_x64.tar.gz",
+      "sha256_0_27_0": "4302bd55c2350c33c551e58a7bdb7863b6bcfaf127ea79334ec0be242dcdbbf7"
+    }
+  }
+}

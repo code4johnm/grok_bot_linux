@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import platform
 import re
 import time
 import urllib.parse
@@ -41,16 +42,42 @@ _SCOPE_HASH_RE = re.compile(r'"hasSeenOnboardingAccountScope"\s*:\s*"([^"]+)"')
 _SCOPES_NONEMPTY_RE = re.compile(r'"accountScopes"\s*:\s*\{[^\s}]')
 
 
-def config_dir() -> Path:
+def _linux_config_dir() -> Path:
     xdg = os.environ.get("XDG_CONFIG_HOME", "").strip()
     root = Path(xdg) if xdg else Path.home() / ".config"
     return root / "Grok Bot"
+
+
+def _platform_config_candidates() -> list[Path]:
+    home = Path.home()
+    system = (os.environ.get("GROK_BOT_TUI_OS") or platform.system() or "").strip().lower()
+    if system in {"darwin", "macos"}:
+        support = home / "Library" / "Application Support"
+        return [
+            support / "Grok Bot",
+            support / "com.anysphere.sand",
+        ]
+    return [_linux_config_dir(), _linux_config_dir().parent / "com.anysphere.sand"]
+
+
+def config_dir() -> Path:
+    override = os.environ.get("GROK_BOT_CONFIG", "").strip()
+    if override:
+        return Path(override)
+    candidates = _platform_config_candidates()
+    for path in candidates:
+        if path.is_dir():
+            return path
+    return candidates[0]
 
 
 def data_dir() -> Path:
     env = os.environ.get("GROK_BOT_DATA", "").strip()
     if env:
         return Path(env)
+    system = (os.environ.get("GROK_BOT_TUI_OS") or platform.system() or "").strip().lower()
+    if system in {"darwin", "macos"}:
+        return config_dir()
     return Path.home() / ".grokbot"
 
 
