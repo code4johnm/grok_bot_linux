@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Kali Linux x86_64 installer for Grok Bot desktop (+ optional CLI).
+# Kali Linux installer for Grok Bot desktop (+ optional CLI). x86_64 or aarch64.
 #
 # Kali is Debian/rolling, not Ubuntu. XFCE+X11 is common. apt only.
 # Does not install Kali offensive/metapackage tools.
@@ -11,16 +11,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/common.sh
 source "$ROOT/scripts/common.sh"
 
+require_desktop_arch
 ARCH="$(uname -m)"
-case "$ARCH" in
-  x86_64|amd64) ;;
-  aarch64|arm64)
-    die "Grok Bot desktop is x86_64 only on Linux. Official CLI supports arm64: ./scripts/install-cli.sh"
-    ;;
-  *)
-    die "unsupported architecture: $ARCH (need x86_64)"
-    ;;
-esac
 
 ID="$(os_id)"
 VER="$(os_version_id)"
@@ -30,7 +22,7 @@ fi
 
 SESSION="${XDG_SESSION_TYPE:-unknown}"
 DESKTOP="${XDG_CURRENT_DESKTOP:-${DESKTOP_SESSION:-unknown}}"
-info "Kali Linux $VER x86_64 (Debian/rolling — not Ubuntu)"
+info "Kali Linux $VER $ARCH (Debian/rolling — not Ubuntu)"
 info "Session: $SESSION  Desktop: $DESKTOP (do not assume GNOME)"
 if [[ "$SESSION" == "wayland" ]]; then
   info "Wayland detected. If the GUI fails: ELECTRON_OZONE_PLATFORM_HINT=x11 grok-bot"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build an x86_64 .rpm for Rocky Linux 9/10 (RHEL-family).
+# Build an x86_64 or aarch64 .rpm for Rocky Linux 9/10 (RHEL-family).
 # Layout: /opt/grok-bot, /usr/bin/grok-bot, /usr/share/applications
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -14,7 +14,10 @@ have rpmbuild || die "rpmbuild is required to build an .rpm (rpm-build package)"
 pkg_name="grok-bot"
 pkg_ver="$VERSION"
 pkg_rel="1"
-arch="x86_64"
+case "${UPSTREAM_ARCH:-$(linux_cpu)}" in
+  arm64) arch="aarch64" ;;
+  *)     arch="x86_64" ;;
+esac
 top="$ROOT/dist/rpmbuild"
 rm -rf "$top"
 mkdir -p "$top"/{BUILD,RPMS,SOURCES,SPECS,SRPMS,BUILDROOT}
@@ -68,7 +71,7 @@ cat > "$top/SPECS/${pkg_name}.spec" <<EOF
 Name:           ${pkg_name}
 Version:        ${pkg_ver}
 Release:        ${pkg_rel}%{?dist}
-Summary:        Grok Bot desktop (community Linux port)
+Summary:        Grok Bot desktop (Linux packaging)
 License:        Proprietary and MIT
 URL:            https://x.ai/bot
 Source0:        %{name}-%{version}.tar.gz
@@ -93,8 +96,8 @@ Requires:       libXrandr
 Requires:       libXfixes
 
 %description
-Community Linux packaging of the official Grok Bot desktop app for
-Rocky Linux 9/10 (x86_64). There is no official vendor RPM.
+Packaging of the official Grok Bot Linux desktop for Rocky Linux 9/10
+(${arch}). Vendor also publishes grok-bot-*.rpm.
 
 %prep
 %setup -q
@@ -126,7 +129,7 @@ exit 0
 
 %changelog
 * $(date '+%a %b %d %Y') Grok Bot Linux packagers <user@example.org> - ${pkg_ver}-${pkg_rel}
-- Community Linux port package for Rocky Linux
+- Official Linux payload package for Rocky Linux
 EOF
 
 info "Building RPM"

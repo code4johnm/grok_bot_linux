@@ -70,7 +70,7 @@ if [[ -z "$UPSTREAM_SHA256" ]]; then
 fi
 
 archive="$CACHE/$UPSTREAM_TARBALL"
-info "Downloading $UPSTREAM_URL"
+info "Downloading $UPSTREAM_TARBALL (linux-${UPSTREAM_ARCH})"
 http_download "$UPSTREAM_URL" "$archive"
 
 if have sha256sum; then
@@ -89,7 +89,18 @@ fi
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 tar -xzf "$archive" -C "$tmp"
-inner="$(find "$tmp" -maxdepth 2 -type f -name grok-bot -executable | head -n1)"
+# 0.30.0+ tarballs ship the Electron tree under payload/ (verbatim official .deb).
+inner=""
+while IFS= read -r -d '' f; do
+  d="$(dirname "$f")"
+  if [[ -f "$d/chrome-sandbox" || -f "$d/chrome_100_percent.pak" ]]; then
+    inner="$f"
+    break
+  fi
+done < <(find "$tmp" -maxdepth 5 -type f -name grok-bot -perm -111 -print0 2>/dev/null)
+if [[ -z "$inner" ]]; then
+  inner="$(find "$tmp" -maxdepth 5 -type f -name grok-bot -perm -111 | head -n1)"
+fi
 [[ -n "$inner" ]] || die "downloaded archive did not contain grok-bot"
 src="$(dirname "$inner")"
 mkdir -p "$DEST"

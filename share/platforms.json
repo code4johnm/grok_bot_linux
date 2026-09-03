@@ -1,0 +1,22 @@
+{
+  "product": "Grok Bot",
+  "internal_app": "sand",
+  "bundle_id": "com.anysphere.sand",
+  "homepage": "https://x.ai/bot",
+  "desktop_version": "0.36.0",
+  "official_download_api": "https://api2.cursor.sh/updates/api/download/stable/linux-{arch}/sand",
+  "cdn": "https://downloads.cursor.com",
+  "linux": {
+    "note": "Official vendor .deb/.rpm/.AppImage ship for x64 and arm64. This repo installs a verbatim community tarball of that payload for Ubuntu/Rocky/Kali, plus launcher, auto-update, TUI, and Docker.",
+    "upstream": "Nichokas/grokbot-linux-port",
+    "arches": ["x64", "arm64"],
+    "x64": {
+      "tarball": "https://github.com/Nichokas/grokbot-linux-port/releases/download/v{version}/Grok_Bot_{version}_linux_x64.tar.gz",
+      "sha256_0_36_0": "8085c220956606639dd6b52e89f134418dd0d94d65c40f2a1663460a401d78a0"
+    },
+    "arm64": {
+      "tarball": "https://github.com/Nichokas/grokbot-linux-port/releases/download/v{version}/Grok_Bot_{version}_linux_arm64.tar.gz",
+      "sha256_0_36_0": "27dce806e818ec74c3f0c874dd1c26dbe8ba14677a8d11dffd6f00121695dbd8"
+    }
+  }
+}

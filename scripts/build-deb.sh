@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build an amd64 .deb for Ubuntu LTS / Debian-family (x86_64).
+# Build a .deb for Ubuntu LTS / Debian-family (amd64 or arm64).
 # Layout: /opt/grok-bot, /usr/bin/grok-bot, /usr/share/applications
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -13,7 +13,10 @@ have dpkg-deb || die "dpkg-deb is required to build a .deb"
 
 pkg_name="grok-bot"
 pkg_ver="$VERSION"
-arch="amd64"
+case "${UPSTREAM_ARCH:-$(linux_cpu)}" in
+  arm64) arch="arm64" ;;
+  *)     arch="amd64" ;;
+esac
 stage="$ROOT/dist/deb/${pkg_name}_${pkg_ver}_${arch}"
 rm -rf "$stage"
 mkdir -p \
@@ -66,10 +69,10 @@ Maintainer: Grok Bot Linux packagers <user@example.org>
 Depends: libgtk-3-0t64 | libgtk-3-0, libnss3, libnotify4, libxss1, libxtst6, xdg-utils, libgbm1, libasound2t64 | libasound2, libdrm2, libxkbcommon0, libxcomposite1, libxdamage1, libxfixes3, libxrandr2, libsecret-1-0, libcups2t64 | libcups2
 Recommends: fonts-noto-core, fonts-noto-color-emoji, fonts-noto-cjk, fonts-liberation
 Homepage: https://x.ai/bot
-Description: Grok Bot desktop (community Linux port)
- Community Linux packaging of the official Grok Bot desktop app.
- There is no official vendor .deb; this package uses the public
- x86_64 Electron Linux port plus a launcher, icon, and desktop entry.
+Description: Grok Bot desktop (Linux packaging)
+ Packaging of the official Grok Bot Linux desktop (verbatim vendor
+ payload) plus a launcher, icon, and desktop entry. Vendor also
+ publishes grok-bot_*.deb for amd64 and arm64.
 EOF
 
 cat > "$stage/DEBIAN/postinst" <<'EOF'

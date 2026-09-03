@@ -12,7 +12,7 @@ not the official `grok` CLI (`curl -fsSL https://x.ai/cli/install.sh | bash`).
 | **`grok-tui-shell`** | Fullscreen TUI around that GUI: same sign-in, same bot roster, keyboard navigation. Commands `grok-tui-shell` and `grok-bot-tui` are aliases. |
 | **`grok` CLI** | Separate official product. Device/OIDC at `accounts.x.ai`. This shell does **not** call `grok login`. |
 
-Package: `grok-bot-tui` 0.7.2. Python 3.9+ (Pi 3 Bookworm / Ubuntu 20.04+).
+Package: `grok-bot-tui` 0.7.3. Python 3.9+ (Pi 3 Bookworm / Ubuntu 20.04+).
 License: MIT (this packaging tree). Targets: Ubuntu, Kali Linux, Rocky Linux,
 and Raspberry Pi OS / Ubuntu on Raspberry Pi (x86_64, aarch64, armv7l).
 
@@ -65,7 +65,7 @@ and Raspberry Pi OS / Ubuntu on Raspberry Pi (x86_64, aarch64, armv7l).
 - It does **not** list public x.ai/bot marketing templates (Sales Outbound,
   Talent Scout, …) as if they were your session. If you still see those, you
   are on a stale install (0.3.0 or older). Reinstall and restart; header must
-  show **0.7.2**.
+  show **0.7.3**.
 - It does **not** call the official `grok` CLI or `grok login --device-auth`.
 - It cannot list bots that grok-bot has never synced to disk. Open grok-bot
   once, then `/agents`.
@@ -76,8 +76,8 @@ and Raspberry Pi OS / Ubuntu on Raspberry Pi (x86_64, aarch64, armv7l).
 | --- | --- |
 | Python | 3.9 or newer (3.11+ preferred) |
 | Terminal | UTF-8 locale. OSC 8 hyperlinks work in VTE, Kitty, iTerm2, Windows Terminal, and similar. The raw URL is always printed too. SSH and headless Pi: use CLI commands or tmux. |
-| Grok Bot desktop | Needed for GUI sign-in and the roster. **x86_64 only.** Install with `./install.sh` or `scripts/install-ubuntu.sh` / `install-rocky.sh` / `install-kali.sh`. Prefix: `/opt/grok-bot` (system) or `$HOME/.local/opt/grok-bot` (user). |
-| Raspberry Pi / ARM | TUI + CLI run on Pi 3/4/5 (`armv7l`, `aarch64`). No Electron grok-bot tarball; `/gui` and `/login` launch will say so. Use `grok-tui-shell status`. |
+| Grok Bot desktop | Needed for GUI sign-in and the roster. **x86_64 and aarch64.** Install with `./install.sh` or `scripts/install-ubuntu.sh` / `install-rocky.sh` / `install-kali.sh`. Prefix: `/opt/grok-bot` (system) or `$HOME/.local/opt/grok-bot` (user). |
+| Raspberry Pi / ARM | TUI + CLI run on Pi 3/4/5 (`armv7l`, `aarch64`). Desktop grok-bot is available on 64-bit (`aarch64`). 32-bit (`armv7l`) is TUI-only; `/gui` will say so. Use `grok-tui-shell status`. |
 
 Python deps (from `pyproject.toml`): `httpx`, `prompt_toolkit`. Optional:
 `pytest` (`[dev]`), `keyring` (API-key store only).
@@ -113,10 +113,10 @@ python3 -m pip install --user -e "./grok-bot-tui[dev]"
 
 ```bash
 python3 -m pip show grok-bot-tui
-# Version: 0.7.2
+# Version: 0.7.3
 ```
 
-Install grok-bot itself on **x86_64** so `/login` can launch the GUI:
+Install grok-bot itself on **x86_64 or aarch64** so `/login` can launch the GUI:
 
 ```bash
 sudo ./scripts/install-ubuntu.sh --system   # or install-rocky.sh / install-kali.sh
@@ -141,11 +141,11 @@ grok-tui-shell status
 
 Notes:
 
-- **No Electron grok-bot** on ARM. `/login` still prints
-  `https://cursor.com/bot/onboarding`; complete GUI sign-in on an x86_64 grok-bot
-  box if you need the GUI roster. On the Pi, `whoami` / `bots` read local
-  `$HOME/.config/Grok Bot/` if you copied a profile (not recommended) or
-  stay signed out until you sign in with grok-bot on an x86_64 machine.
+- **64-bit Pi (`aarch64`):** desktop grok-bot is available; install it the
+  same way as on x86_64. `/login` launches it.
+- **32-bit Pi (`armv7l`):** TUI only. `/login` still prints
+  `https://cursor.com/bot/onboarding`; complete GUI sign-in on an
+  x86_64/aarch64 grok-bot box if you need the GUI roster.
 - SSH is the normal UI: `ssh host` then `grok-tui-shell`.
 - UTF-8 locale: `sudo dpkg-reconfigure locales` (en_US.UTF-8 is enough).
 - Do not run as root. Use a login user + `loginctl enable-linger` for
@@ -218,7 +218,7 @@ grok-tui-shell --json status
 Fullscreen, five rows of chrome:
 
 ```text
-Grok GUI TUI shell  0.7.2                          ← header (reverse)
+Grok GUI TUI shell  0.7.3                          ← header (reverse)
 Bots  (N from signed-in Grok Bot)                  ← body
 > ▀▀▀▀  Night Watch             2 unread · …
   ▀▀▀▀  Ops                     queue
@@ -342,7 +342,7 @@ Typed lines:
 | `/whoami` | `signed in  Grok Bot GUI session` or truncated key label. |
 | `/agents` | Reload bots from the Grok Bot roster cache. |
 | `/back` `/bots` | Leave chat and return to the bot list (no roster reload). |
-| `/gui` | Launch packaged grok-bot (x86_64). |
+| `/gui` | Launch packaged grok-bot (x86_64 or aarch64). |
 | `/chat` [`<text>`] | Open the chat view (or send if text is given). |
 | `/model` [`<id>`] | Show or set the optional api.x.ai model id. |
 | `/clear` | Clear the in-memory transcript. |
@@ -408,8 +408,8 @@ successful API replies is appended to `$HOME/.grok-bot-tui/usage.jsonl`
   (and the older `Grok_Bot` directory names)
 
 Prefers a wrapper (`launch.sh`) over a raw Electron binary when both exist.
-Spawn uses `start_new_session=True` (detached). On aarch64 the TUI prints that
-the desktop is x86_64-only.
+Spawn uses `start_new_session=True` (detached). On 32-bit ARM the TUI prints
+that the desktop needs x86_64 or aarch64.
 
 ## Config file
 
@@ -490,12 +490,12 @@ Examples use `$HOME` and `/opt/grok-bot` only.
 
 | Symptom | What to do |
 | --- | --- |
-| Header `0.3.0` and bots named Sales Outbound / Talent Scout / Chief of Staff | Stale install. `./grok-bot-tui/install.sh --yes`, quit the TUI, run `grok-tui-shell` again. Header must be **0.7.2** and the list heading must say `from signed-in Grok Bot`. |
+| Header `0.3.0` and bots named Sales Outbound / Talent Scout / Chief of Staff | Stale install. `./grok-bot-tui/install.sh --yes`, quit the TUI, run `grok-tui-shell` again. Header must be **0.7.3** and the list heading must say `from signed-in Grok Bot`. |
 | Signed out even though grok-bot is signed in | `/login`, or check `$HOME/.grokbot/settings.json` exists for this user. `XDG_CONFIG_HOME` must match the desktop. |
 | `No bots in the Grok Bot cache yet` | Open grok-bot so it writes `sand-client-persistence`, then `/agents`. |
 | List does not match the GUI | `/agents`. Hidden bots stay hidden. Pin order follows the GUI. |
-| `/login` says grok-bot not found | Install the desktop on x86_64; put `grok-bot` on `PATH` or under `/opt/grok-bot`. |
-| `/gui` on a Pi / arm64 | Expected: desktop is x86_64-only. TUI still runs. |
+| `/login` says grok-bot not found | Install the desktop on x86_64 or aarch64; put `grok-bot` on `PATH` or under `/opt/grok-bot`. |
+| `/gui` on a 32-bit Pi | Expected: desktop needs x86_64 or aarch64. TUI still runs. |
 | OSC 8 does not click | Copy the raw `https://cursor.com/bot/onboarding` line. |
 | `/logout` still shows bots after restart | `/logout` only ignores the GUI session for this TUI. Sign out inside grok-bot to end the desktop session, or leave the ignore file in place. |
 | Wrong Python / two copies | `type grok-tui-shell`; `python3 -m pip show grok-bot-tui`. Editable location must be this clone. |

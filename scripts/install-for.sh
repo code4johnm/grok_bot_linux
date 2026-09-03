@@ -12,7 +12,7 @@ source "$ROOT/scripts/common.sh"
 TARGET="${1:-}"
 shift || true
 
-# TUI-only: no Electron. Works on aarch64. Do not dispatch to desktop installers.
+# TUI-only: no Electron. Safe on 32-bit ARM. Do not dispatch to desktop installers.
 if [[ "$TARGET" == "--tui-only" ]]; then
   exec "$ROOT/scripts/install-tui.sh"
 fi
@@ -75,16 +75,16 @@ case "$TARGET" in
     cat <<EOF
 Usage: $0 ubuntu|rocky|kali|auto [install flags]
 
-  ubuntu   Ubuntu LTS x86_64 (Debian/Mint reuse)
-  rocky    Rocky Linux 9/10 x86_64 (RHEL/Alma reuse)
-  kali     Kali Linux x86_64 (Debian/rolling, not Ubuntu)
+  ubuntu   Ubuntu LTS x86_64/aarch64 (Debian/Mint reuse)
+  rocky    Rocky Linux 9/10 x86_64/aarch64 (RHEL/Alma reuse)
+  kali     Kali Linux x86_64/aarch64 (Debian/rolling, not Ubuntu)
   auto     /etc/os-release: kali, then ubuntu/debian/mint, then rocky/rhel
 
 System prefix on every dist: /opt/grok-bot
 
 Flags are passed through (--system, --user, --with-cli, ...).
 
-  --tui-only   Install grok-bot-tui only (no Electron). Safe on aarch64.
+  --tui-only   Install grok-bot-tui only (no Electron). Safe on 32-bit ARM.
                Same as scripts/install-tui.sh
 EOF
     exit 0

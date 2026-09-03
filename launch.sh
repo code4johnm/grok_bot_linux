@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Portable launcher for the community Linux port of Grok Bot (Electron).
+# Portable launcher for Grok Bot on Linux (official Electron payload).
 set -euo pipefail
 
 _resolve_root() {

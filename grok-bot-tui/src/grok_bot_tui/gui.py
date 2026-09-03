@@ -1,4 +1,4 @@
-"""Launch packaged grok-bot on x86_64 only. Never open a browser."""
+"""Launch packaged grok-bot on x86_64 and aarch64. Never open a browser."""
 
 from __future__ import annotations
 
@@ -9,13 +9,14 @@ import subprocess
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-DESKTOP_ARCHES = frozenset({"x86_64", "amd64"})
-DESKTOP_X86_ONLY = (
-    "grok-bot desktop is x86_64 only; there is no working desktop tarball "
-    "for arm64. Chat still works."
+DESKTOP_ARCHES = frozenset({"x86_64", "amd64", "aarch64", "arm64"})
+DESKTOP_UNSUPPORTED = (
+    "grok-bot desktop needs x86_64 or aarch64; there is no desktop tarball "
+    "for this architecture. Chat still works."
 )
+DESKTOP_X86_ONLY = DESKTOP_UNSUPPORTED
 MISSING_DESKTOP = (
-    "grok-bot not found. On x86_64 install with ./install.sh "
+    "grok-bot not found. On x86_64 or aarch64 install with ./install.sh "
     "(PATH, /opt/grok-bot/grok-bot, or ~/.local/opt/grok-bot/grok-bot). "
     "Chat still works."
 )
@@ -115,9 +116,9 @@ def launch_grok_bot(
     candidates: Sequence[Path] | None = None,
     arch: str | None = None,
 ) -> str:
-    """Start packaged grok-bot / launch.sh on x86_64. Never open a browser."""
+    """Start packaged grok-bot / launch.sh on x86_64/aarch64. Never open a browser."""
     if not desktop_supported(arch):
-        return DESKTOP_X86_ONLY
+        return DESKTOP_UNSUPPORTED
     desktop = find_desktop(candidates)
     if desktop is None:
         return MISSING_DESKTOP

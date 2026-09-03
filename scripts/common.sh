@@ -7,7 +7,7 @@ if [[ -z "${ROOT:-}" ]]; then
   ROOT="$(cd "$_COMMON_DIR/.." && pwd)"
 fi
 
-VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION" 2>/dev/null || echo 0.24.0)"
+VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION" 2>/dev/null || echo 0.36.0)"
 APP_NAME="Grok Bot"
 APP_ID="grok-bot"
 DEFAULT_OPT_DIR="${GROK_BOT_HOME:-$HOME/.local/opt/grok-bot}"
@@ -34,16 +34,60 @@ UPSTREAM_LATEST_API="https://api.github.com/repos/${UPSTREAM_REPO}/releases/late
 
 CACHE_DIR="${GROK_BOT_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/grok-bot}"
 
+# Verbatim community tarball of the official vendor .deb (Nichokas/grokbot-linux-port).
 KNOWN_UPSTREAM_SHA256_0_24_0="f6b6495f9398a9d60702a282b404ac52e2b1c1c345d3ba81bbbd242e49ea6aad"
+KNOWN_UPSTREAM_SHA256_0_36_0_X64="8085c220956606639dd6b52e89f134418dd0d94d65c40f2a1663460a401d78a0"
+KNOWN_UPSTREAM_SHA256_0_36_0_ARM64="27dce806e818ec74c3f0c874dd1c26dbe8ba14677a8d11dffd6f00121695dbd8"
+
+OFFICIAL_APP="sand"
+OFFICIAL_DOWNLOAD_API="https://api2.cursor.sh/updates/api/download/stable"
+DOWNLOADS_CDN="https://downloads.cursor.com"
+PLATFORMS_JSON="${ROOT}/share/platforms.json"
+
+# Cursor/xAI arch label used in tarball names and the download API.
+linux_cpu() {
+  local m
+  m="$(uname -m 2>/dev/null || echo x86_64)"
+  case "$m" in
+    aarch64|arm64) echo arm64 ;;
+    x86_64|amd64) echo x64 ;;
+    *) echo "$m" ;;
+  esac
+}
+
+is_desktop_arch() {
+  case "$(uname -m 2>/dev/null || echo unknown)" in
+    x86_64|amd64|aarch64|arm64) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+require_desktop_arch() {
+  local m
+  m="$(uname -m 2>/dev/null || echo unknown)"
+  case "$m" in
+    x86_64|amd64|aarch64|arm64) ;;
+    *)
+      die "Grok Bot desktop needs x86_64 or aarch64 (got $m). Official CLI: ./scripts/install-cli.sh"
+      ;;
+  esac
+}
 
 set_upstream_version() {
   VERSION="$(ver_norm "${1:-$VERSION}")"
   UPSTREAM_TAG="v${VERSION}"
-  UPSTREAM_TARBALL="Grok_Bot_${VERSION}_linux_x64.tar.gz"
+  UPSTREAM_ARCH="$(linux_cpu)"
+  case "$UPSTREAM_ARCH" in
+    x64|arm64) ;;
+    *) UPSTREAM_ARCH="x64" ;;
+  esac
+  UPSTREAM_TARBALL="Grok_Bot_${VERSION}_linux_${UPSTREAM_ARCH}.tar.gz"
   UPSTREAM_URL="https://github.com/${UPSTREAM_REPO}/releases/download/${UPSTREAM_TAG}/${UPSTREAM_TARBALL}"
-  case "$VERSION" in
-    0.24.0) UPSTREAM_SHA256="$KNOWN_UPSTREAM_SHA256_0_24_0" ;;
-    *)      UPSTREAM_SHA256="" ;;
+  case "${VERSION}_${UPSTREAM_ARCH}" in
+    0.36.0_x64)   UPSTREAM_SHA256="$KNOWN_UPSTREAM_SHA256_0_36_0_X64" ;;
+    0.36.0_arm64) UPSTREAM_SHA256="$KNOWN_UPSTREAM_SHA256_0_36_0_ARM64" ;;
+    0.24.0_x64)   UPSTREAM_SHA256="$KNOWN_UPSTREAM_SHA256_0_24_0" ;;
+    *)            UPSTREAM_SHA256="" ;;
   esac
 }
 
@@ -115,7 +159,7 @@ os_id_like() {
   printf '%s\n' "${ID_LIKE:-}"
 }
 
-# Primary desktop target: Ubuntu LTS x86_64 (24.04, 26.04). 22.04 still works.
+# Primary desktop target: Ubuntu LTS (24.04, 26.04), x86_64 or aarch64. 22.04 still works.
 is_ubuntu_lts() {
   [[ "$(os_id)" == "ubuntu" ]] || return 1
   case "$(os_version_id)" in
@@ -124,7 +168,7 @@ is_ubuntu_lts() {
   esac
 }
 
-# Primary enterprise target: Rocky Linux 9 or 10 x86_64.
+# Primary enterprise target: Rocky Linux 9 or 10, x86_64 or aarch64.
 is_rocky() {
   [[ "$(os_id)" == "rocky" ]]
 }
@@ -144,7 +188,7 @@ is_rhel_family() {
   return 1
 }
 
-# Primary Debian-family rolling target: Kali Linux x86_64.
+# Primary Debian-family rolling target: Kali Linux, x86_64 or aarch64.
 is_kali() {
   [[ "$(os_id)" == "kali" ]] && return 0
   case " $(os_id_like) " in
@@ -258,8 +302,15 @@ wrapper_revision() {
 # Print: version<TAB>url<TAB>sha256  for the latest Nichokas Linux tarball.
 latest_upstream_release() {
   have python3 || return 1
+  local arch="${1:-$(linux_cpu)}"
+  case "$arch" in
+    x64|arm64) ;;
+    *) arch="x64" ;;
+  esac
   http_get "$UPSTREAM_LATEST_API" | python3 -c '
 import json, sys
+arch = sys.argv[1]
+suffix = "_linux_%s.tar.gz" % arch
 d = json.load(sys.stdin)
 if d.get("draft") or d.get("prerelease"):
     sys.exit("latest GitHub release is a draft/prerelease")
@@ -267,15 +318,36 @@ tag = d.get("tag_name", "").lstrip("v")
 url = sha = ""
 for a in d.get("assets") or []:
     name = a.get("name") or ""
-    if name.endswith("_linux_x64.tar.gz"):
+    if name.endswith(suffix):
         url = a.get("browser_download_url") or ""
         dig = a.get("digest") or ""
         if dig.startswith("sha256:"):
             sha = dig.split(":", 1)[1]
         break
 if not tag or not url:
-    sys.exit("could not find a linux-x64 tarball on the latest release")
+    sys.exit("could not find a linux-%s tarball on the latest release" % arch)
 print(f"{tag}\t{url}\t{sha}")
+' "$arch"
+}
+
+# Print: version<TAB>debUrl<TAB>rpmUrl<TAB>appImageUrl  from the official Linux API.
+latest_official_linux() {
+  have python3 || return 1
+  local arch="${1:-$(linux_cpu)}"
+  case "$arch" in
+    x64|arm64) ;;
+    *) arch="x64" ;;
+  esac
+  http_get "${OFFICIAL_DOWNLOAD_API}/linux-${arch}/${OFFICIAL_APP}" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+ver = (d.get("version") or "").lstrip("v")
+deb = d.get("debUrl") or ""
+rpm = d.get("rpmUrl") or ""
+app = d.get("downloadUrl") or ""
+if not ver:
+    sys.exit("could not parse official Linux download API")
+print(f"{ver}\t{deb}\t{rpm}\t{app}")
 '
 }
 

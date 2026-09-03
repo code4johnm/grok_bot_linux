@@ -1,6 +1,6 @@
 services:
   grok-bot:
-    image: grok-bot-linux:0.24.0
+    image: grok-bot-linux:0.36.0
     build:
       context: ..
       dockerfile: docker/Dockerfile

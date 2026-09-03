@@ -103,7 +103,7 @@ def _status(cfg: Config) -> int:
     print(f"{TITLE} {__version__}")
     print(f"python: {payload['python']}")
     print(f"arch: {arch}")
-    print(f"desktop: {'yes' if desktop else 'no (Electron grok-bot is x86_64 only)'}")
+    print(f"desktop: {'yes' if desktop else 'no (Electron grok-bot needs x86_64 or aarch64)'}")
     if found:
         print(f"grok-bot: {found}")
     print(f"signed_in: {'yes' if ident.signed_in else 'no'}")

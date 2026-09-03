@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Rocky Linux 9/10 x86_64 installer for Grok Bot desktop (+ optional CLI).
+# Rocky Linux 9/10 installer for Grok Bot desktop (+ optional CLI).
 #
-# Primary enterprise OS: Rocky Linux 9 or 10, x86_64 (dnf, SELinux).
+# Primary enterprise OS: Rocky Linux 9 or 10, x86_64 or aarch64 (dnf, SELinux).
 # Cousins: RHEL, AlmaLinux — same script. Fedora is not this path.
 #
 # Default (non-root): $HOME/.local/opt/grok-bot
@@ -11,16 +11,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=scripts/common.sh
 source "$ROOT/scripts/common.sh"
 
+require_desktop_arch
 ARCH="$(uname -m)"
-case "$ARCH" in
-  x86_64|amd64) ;;
-  aarch64|arm64)
-    die "Grok Bot desktop is x86_64 only on Linux. Official CLI supports arm64: ./scripts/install-cli.sh"
-    ;;
-  *)
-    die "unsupported architecture: $ARCH (need x86_64)"
-    ;;
-esac
 
 FAMILY="$(os_family)"
 ID="$(os_id)"
@@ -29,7 +21,7 @@ if [[ "$FAMILY" != "rhel" ]]; then
   die "This helper is for Rocky Linux / RHEL / AlmaLinux. Detected: $ID ($FAMILY). For Ubuntu LTS use ./scripts/install-ubuntu.sh"
 fi
 if is_rocky_supported; then
-  info "Rocky Linux $VER x86_64 (primary enterprise target)"
+  info "Rocky Linux $VER $ARCH (primary enterprise target)"
 elif is_rocky; then
   warn "Rocky Linux $VER is outside 9/10; continuing with Rocky package names"
 elif is_rhel_family; then
@@ -67,10 +59,10 @@ if [[ "$SYSTEM_REQ" -eq 1 ]]; then
       "$0" --system "${PASS[@]}"
   fi
   info "System install -> /opt/grok-bot"
-  info "Grok Bot desktop: community Linux port (no official vendor .rpm)"
+  info "Grok Bot desktop: official Linux payload (community tarball of the vendor .deb)"
   exec "$ROOT/install.sh" --system --opt-dir /opt/grok-bot "${PASS[@]}"
 fi
 
 info "Non-root install -> \$HOME/.local/opt/grok-bot"
-info "Grok Bot desktop: community Linux port (no official vendor .rpm)"
+info "Grok Bot desktop: official Linux payload (community tarball of the vendor .deb)"
 exec "$ROOT/install.sh" --user --opt-dir "${HOME}/.local/opt/grok-bot" "${PASS[@]}"

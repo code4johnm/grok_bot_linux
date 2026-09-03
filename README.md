@@ -1,7 +1,7 @@
 # Grok Bot Linux (Ubuntu LTS + Rocky Linux + Kali)
 
 Stand-alone packaging for **two** products on **three first-class OS
-targets** (x86_64):
+targets** (x86_64 and aarch64):
 
 | Role | OS | Installer |
 | --- | --- | --- |
@@ -21,21 +21,25 @@ sandbox rules stay on the matching script.
 
 | Product | What it is | How it is installed |
 | --- | --- | --- |
-| **Grok Bot desktop** | Official teammate / virtual-computer GUI from https://x.ai/bot | Community Linux port (no official vendor `.deb`) |
+| **Grok Bot desktop** | Official teammate / virtual-computer GUI from https://x.ai/bot | Official Linux `.deb` / `.rpm` / AppImage, or this repo’s tarball of the same payload |
 | **Grok CLI** | Official native Linux agent / Grok Build | `curl -fsSL https://x.ai/cli/install.sh \| bash` |
-| **grok-tui-shell** (`grok-bot-tui`) | Terminal shell for **Grok Bot** (the Electron GUI — not grok.com chat, not the `grok` CLI). `/login` uses the same sign-in as grok-bot and lists **your** roster. `/gui` launches the desktop on x86_64. | `./scripts/install-tui.sh` or `pip install -e ./grok-bot-tui` — full guide: [grok-bot-tui/README.md](grok-bot-tui/README.md) |
+| **grok-tui-shell** (`grok-bot-tui`) | Terminal shell for **Grok Bot** (the Electron GUI — not grok.com chat, not the `grok` CLI). `/login` uses the same sign-in as grok-bot and lists **your** roster. `/gui` launches the desktop on x86_64 and aarch64. | `./scripts/install-tui.sh` or `pip install -e ./grok-bot-tui` — full guide: [grok-bot-tui/README.md](grok-bot-tui/README.md) |
 
 The desktop app is a GUI around the same ecosystem. It does **not** replace the
 CLI. Install both.
 
-**Official support status.** xAI/Cursor do not currently ship a native Linux
-`.deb` or `.rpm` for Grok Bot desktop. This tree uses the public
-[community Linux port](https://github.com/Nichokas/grokbot-linux-port) of the
-official Windows package fused with Electron for Linux. The CLI **is** official
-and supports Linux x86_64 and arm64.
+**Official support status.** xAI/Cursor now ship official Linux `.deb`, `.rpm`,
+and AppImage for **x86_64 and arm64** (product name `sand`; live manifest:
+`https://api2.cursor.sh/updates/api/download/stable/linux-<arch>/sand`).
+This tree wraps that same payload for a unified Ubuntu / Rocky / Kali install
+(user-local prefix, launcher, sandbox helpers, auto-update, TUI, Docker). The
+tarball comes from the public
+[community Linux port](https://github.com/Nichokas/grokbot-linux-port), a
+verbatim extract of the official `.deb`. The CLI **is** official and supports
+Linux x86_64 and arm64.
 
-**Architecture.** Desktop: **x86_64 only**. CLI: x86_64 and aarch64. There is
-no working Grok Bot desktop tarball for arm64 at this time.
+**Architecture.** Desktop: **x86_64 and aarch64**. CLI: x86_64 and aarch64.
+32-bit ARM (`armv7l`) has no desktop tarball; use the TUI and the official CLI.
 
 Privacy: examples use `$HOME`, `/opt/grok-bot`, and `user@example.org` only.
 
@@ -54,14 +58,14 @@ grok-tui-shell
 (OSC 8 + raw URL). Finish sign-in in the GUI. The TUI then lists
 bots from that signed-in roster (`Bots (N from signed-in Grok Bot)`). It does
 not read Cookies and does not call `grok login`. Header version must be
-**0.7.2** or newer (0.3.0 showed public templates instead of your bots).
-Raspberry Pi (ARM): `./grok-bot-tui/install.sh --yes --autostart` then
-`tmux attach -t grok-tui`. Electron grok-bot is x86_64-only; the TUI still
-runs. See [grok-bot-tui/README.md](grok-bot-tui/README.md).
+**0.7.3** or newer (0.3.0 showed public templates instead of your bots).
+Raspberry Pi: `./grok-bot-tui/install.sh --yes --autostart` then
+`tmux attach -t grok-tui`. Desktop grok-bot runs on 64-bit Pi (`aarch64`);
+32-bit (`armv7l`) is TUI-only. See [grok-bot-tui/README.md](grok-bot-tui/README.md).
 
 ## UBUNTU (copy-paste)
 
-Ubuntu 26.04 LTS or 24.04 LTS, x86_64. Substitute your actual clone path.
+Ubuntu 26.04 LTS or 24.04 LTS, x86_64 or aarch64. Substitute your actual clone path.
 
 ```bash
 sudo apt-get update
@@ -85,7 +89,7 @@ grok --version
 
 ## ROCKY (copy-paste)
 
-Rocky Linux 9 or 10, x86_64. Same app prefix as Ubuntu: `/opt/grok-bot`.
+Rocky Linux 9 or 10, x86_64 or aarch64. Same app prefix as Ubuntu: `/opt/grok-bot`.
 
 ```bash
 sudo dnf install -y curl ca-certificates git tar
@@ -119,8 +123,8 @@ sudo dnf install -y gtk3 libnotify nss libXScrnSaver libXtst xdg-utils \
 
 ## KALI (copy-paste)
 
-Kali Linux x86_64 (Debian/rolling, **not Ubuntu**). Desktop is often XFCE on
-X11. System prefix: `/opt/grok-bot`. Does not install offensive Kali tools.
+Kali Linux x86_64 or aarch64 (Debian/rolling, **not Ubuntu**). Desktop is often
+XFCE on X11. System prefix: `/opt/grok-bot`. Does not install offensive Kali tools.
 
 ```bash
 sudo apt-get update
@@ -153,8 +157,8 @@ Optional packages:
 ```bash
 ./scripts/build-deb.sh    # Ubuntu/Debian amd64
 ./scripts/build-rpm.sh    # Rocky/RHEL x86_64
-sudo apt install ./dist/grok-bot_0.24.0_amd64.deb
-sudo dnf install ./dist/grok-bot-0.24.0-1.*.rpm
+sudo apt install ./dist/grok-bot_0.36.0_amd64.deb
+sudo dnf install ./dist/grok-bot-0.36.0-1.*.rpm
 ```
 
 Do **not** install the macOS `.dmg` in Docker as a Linux implementation.
@@ -397,7 +401,11 @@ fonts via `./scripts/install-deps.sh`.
 The launcher sets `LIBVA_DRIVER_NAME=i965` on Gen6–Gen7.5 GPUs.
 
 **arm64 desktop**
-Not available from the community port. Use the official CLI on aarch64.
+Official tarball exists for aarch64. 32-bit ARM (`armv7l`) still has no
+desktop payload; use the TUI and `./scripts/install-cli.sh`.
+
+Live versions: `./scripts/check-official.sh` (official Linux API vs this
+tree vs the community tarball).
 
 ## For other agents
 
@@ -410,6 +418,7 @@ Install Grok Bot for ubuntu|rocky|kali
 ./scripts/install-for.sh rocky  --system --with-cli
 ./scripts/install-for.sh kali   --system --with-cli
 ./scripts/install-for.sh auto   --system --with-cli
+./scripts/check-official.sh
 ```
 
 Detection (`auto`): `/etc/os-release` — kali (`ID` or `ID_LIKE`) first, then
@@ -422,7 +431,9 @@ CLI only:
 ```
 
 Do not wrap the macOS DMG. Do not scrape extra app bits beyond the public
-Linux port. Do not embed credentials. Do not change sudoers without asking.
+Linux tarball (verbatim official `.deb` payload). Do not embed credentials.
+Do not change sudoers without asking. `./scripts/check-official.sh` compares
+`VERSION` to the official Linux channel.
 
 ## Docker (optional)
 

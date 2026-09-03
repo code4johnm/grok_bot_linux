@@ -28,7 +28,7 @@ Install grok-tui-shell (package grok-bot-tui) on:
   Ubuntu, Kali Linux, Rocky Linux, Raspberry Pi OS / Ubuntu on Raspberry Pi
 
 Detects OS + architecture (x86_64, aarch64, armv7l) and uses apt or dnf.
-Does not install Electron grok-bot (x86_64 desktop is a separate installer).
+Does not install Electron grok-bot (desktop is a separate installer).
 Does not install Kali offensive metapackages.
 
 Options:
@@ -123,10 +123,10 @@ case "$ARCH" in
 esac
 
 info "OS: ${PRETTY:-unknown}  family=${FAMILY}  arch=${ARCH}  pm=${PM}"
-if [[ "$ARCH" == "x86_64" || "$ARCH" == "amd64" ]]; then
+if [[ "$ARCH" == "x86_64" || "$ARCH" == "amd64" || "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
   info "Electron grok-bot desktop is available on this arch (install separately)."
 else
-  info "Raspberry Pi / ARM: TUI only. grok-bot Electron is x86_64-only."
+  info "32-bit ARM: TUI only. grok-bot Electron needs x86_64 or aarch64."
 fi
 
 if [[ "$(id -u)" -eq 0 && "$MODE" == "user" ]]; then

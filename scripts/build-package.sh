@@ -11,7 +11,7 @@ WITH_DOCKER_IMAGE=0
 "$ROOT/scripts/download-app.sh" "$ROOT/app"
 [[ -x "$ROOT/app/grok-bot" ]] || die "app payload missing"
 
-STAGE_NAME="grok_bot_linux-${VERSION}-linux-x64"
+STAGE_NAME="grok_bot_linux-${VERSION}-linux-${UPSTREAM_ARCH}"
 STAGE="$ROOT/dist/stage/$STAGE_NAME"
 DIST="$ROOT/dist"
 rm -rf "$STAGE"

@@ -23,7 +23,7 @@ from grok_bot_tui.app import (
     render_transcript,
 )
 from grok_bot_tui.config import DEFAULT_MODEL, build_parser, load_config
-from grok_bot_tui.gui import DESKTOP_X86_ONLY, MISSING_DESKTOP, launch_grok_bot
+from grok_bot_tui.gui import DESKTOP_UNSUPPORTED, MISSING_DESKTOP, launch_grok_bot
 
 PKG = Path(__file__).resolve().parents[1]
 REPO = PKG.parent
@@ -108,7 +108,7 @@ def test_gui_launches_desktop_on_x86_never_grok_com(tmp_path: Path) -> None:
     assert "Launched grok-bot" in msg
 
 
-def test_gui_aarch64_does_not_launch(tmp_path: Path) -> None:
+def test_gui_aarch64_launches(tmp_path: Path) -> None:
     desktop = tmp_path / "grok-bot"
     desktop.write_text("#!/bin/sh\n")
     desktop.chmod(0o755)
@@ -119,8 +119,24 @@ def test_gui_aarch64_does_not_launch(tmp_path: Path) -> None:
         return object()
 
     msg = launch_grok_bot(popen=fake_popen, candidates=[desktop], arch="aarch64")
+    assert spawned == [[str(desktop)]]
+    assert "Launched grok-bot" in msg
+    assert "grok.com" not in msg
+
+
+def test_gui_armv7l_does_not_launch(tmp_path: Path) -> None:
+    desktop = tmp_path / "grok-bot"
+    desktop.write_text("#!/bin/sh\n")
+    desktop.chmod(0o755)
+    spawned: list[list[str]] = []
+
+    def fake_popen(cmd: list[str], **_kwargs: object) -> object:
+        spawned.append(cmd)
+        return object()
+
+    msg = launch_grok_bot(popen=fake_popen, candidates=[desktop], arch="armv7l")
     assert spawned == []
-    assert msg == DESKTOP_X86_ONLY
+    assert msg == DESKTOP_UNSUPPORTED
     assert "grok.com" not in msg
     assert "Chat still works" in msg
 
@@ -285,7 +301,7 @@ def test_package_is_not_grok() -> None:
     assert "does **not** read Cookies" in readme
     assert "does **not** call the official `grok` CLI" in readme
     assert "Sales Outbound" in readme  # documented as stale-install symptom only
-    assert "0.7.2" in readme
+    assert "0.7.3" in readme
     assert "Chat stays in this terminal" in readme or "chat stays" in readme.lower()
     assert "Raspberry Pi" in readme
     assert "install.sh" in readme
