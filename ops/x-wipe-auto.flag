@@ -1,0 +1,8 @@
+X-WIPE-AUTO START
+requested_by: John M. Cook
+requested_at: 2026-10-19T22:10:00-04:00
+action: start X-Wipe Auto
+target: X account @quantumlabs2026 (handle addyournameglob)
+scope: remove posts related to ex-wife (Suzanne); do not touch anything else
+mode: dry-run first, report before any deletion
+notes: X API credits were depleted as of 24 Aug 2026 (402). Cron/automation must verify credits at console.x.com before executing. If credits unavailable, report blocked and stop.
