@@ -1,20 +1,23 @@
 X-WIPE-AUTO START
 requested_by: John M. Cook
-requested_at: 2026-10-19T22:50:00-04:00
+requested_at: 2026-10-19T23:06:00-04:00
 action: start X-Wipe Auto
 mode: CLI auto
 target: X account @nathanjon007
 scope: Suzanne-related posts on that one account only; do not touch anything else
 deletion_policy: no deletion without John's explicit yes, unless John later says otherwise
 layout: >
-  CODE lives in GitHub: repo code4johnm/grok-async-index (fallback: code4johnm/grok_bot_linux
-  under async-listener/). Google Drive folder "Grok" (id 14EOF4io_Y1_QQeWeL8sX0hGXNN-S20s_)
-  is for LIGHTWEIGHT files ONLY: log/status/heartbeat JSON, index messages (msg-*.yaml,
-  reply-*.yaml), channel-config. No code files in Drive.
+  CODE in GitHub: code4johnm/grok-async-index (async_listener.py, config.yaml, README.md).
+  Drive folder "Grok" (14EOF4io_Y1_QQeWeL8sX0hGXNN-S20s_) = lightweight files only.
+messaging_model: >
+  ONE YAML file PER TOPIC in Drive/Grok, with dated entries appended inside (topic + entries[]).
+  Current topic files: test.yaml, shutdown.yaml. No more per-message msg-*.yaml/reply-*.yaml;
+  the old per-message files were trashed. Future commands = new dated entries appended to the
+  relevant topic file; the agent appends its reply as an entry in the same file.
 architecture: >
-  Async messaging is POLL-based over HTTPS via the Drive API. async_listener.py on the laptop
-  polls the Grok Drive folder (default every 30s), scoops new msg-*.yaml, acts, writes
-  reply-*.yaml back. NO webhook, NO public port, NO changes.watch. Nothing binds a port.
+  Poll-based over HTTPS via Drive API. async_listener.py on the laptop polls the Grok folder
+  (default 30s), reads topic files, processes unseen entries, appends reply entries. NO webhook,
+  NO public port, NO changes.watch.
 reachability_check: heartbeat.py liveness -> small JSON (method, timestamp, last status) in Drive/Grok. No X-API hammering.
 notes: >
   wipe_x.py lives at /mnt/5TB/x-wipe/wipe_x.py on the Kali laptop, not in this repo.
