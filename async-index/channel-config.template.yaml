@@ -1,0 +1,22 @@
+# channel-config.template.yaml
+#
+# Template for the Drive Changes API watch channel. COPY this to
+# channel-config.yaml in the Drive/Grok folder and fill it in FROM THE LAPTOP
+# after registering the watch with the laptop's own Google credentials.
+#
+# Registration (laptop only; see README.md "Register the watch channel"):
+#   1. page_token  <- drive.changes.getStartPageToken()
+#   2. channel_id  <- a UUID you generate
+#   3. token       <- same secret stored in ~/.grok/webhook.conf (WEBHOOK_TOKEN)
+#   4. webhook_url <- your VERIFIED HTTPS URL (NOT a bare IP, NOT http:80)
+#   5. resource_id + expiration <- returned by drive.changes.watch()
+#
+# NOTE: changes.watch / getStartPageToken / changes.list are NOT available to
+# Creator Bot's connector. They require the laptop's Google creds.
+
+channel_id: "<fill-in: uuid you generated for the watch channel>"
+resource_id: "<fill-in: X-Goog-Resource-ID returned by changes.watch>"
+token: "<fill-in: must match WEBHOOK_TOKEN in ~/.grok/webhook.conf>"
+page_token: "<fill-in: from changes.getStartPageToken>"
+expiration: "<fill-in: epoch ms returned by changes.watch>"
+webhook_url: "<fill-in: https://your-verified-domain/webhook>"

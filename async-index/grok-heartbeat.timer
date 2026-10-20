@@ -1,0 +1,13 @@
+# grok-heartbeat.timer — triggers grok-heartbeat.service every 5 minutes.
+[Unit]
+Description=Run Grok heartbeat every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=true
+Unit=grok-heartbeat.service
+
+[Install]
+WantedBy=timers.target

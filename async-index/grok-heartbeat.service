@@ -1,0 +1,24 @@
+# grok-heartbeat.service — oneshot unit that runs one heartbeat check.
+# Paired with grok-heartbeat.timer (every 5 minutes).
+#
+# INSTALL (on the laptop):
+#   sudo mkdir -p /opt/grok
+#   sudo cp heartbeat.py /opt/grok/heartbeat.py
+#   # Edit User= and (optionally) the HEARTBEAT_JSON path below.
+#   sudo cp grok-heartbeat.service grok-heartbeat.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now grok-heartbeat.timer
+#   systemctl list-timers grok-heartbeat.timer
+
+[Unit]
+Description=Grok laptop liveness heartbeat (one check)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Change to the laptop user who owns the Drive-synced Grok folder:
+User=user
+# Point this at the locally Drive-synced Grok folder:
+Environment=HEARTBEAT_JSON=%h/GoogleDrive/Grok/heartbeat.json
+ExecStart=/usr/bin/python3 /opt/grok/heartbeat.py
