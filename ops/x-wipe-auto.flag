@@ -1,6 +1,6 @@
 X-WIPE-AUTO START
 requested_by: John M. Cook
-requested_at: 2026-10-19T22:25:00-04:00
+requested_at: 2026-10-19T22:40:00-04:00
 action: start X-Wipe Auto
 mode: CLI auto
 target: X account @nathanjon007
@@ -9,9 +9,16 @@ deletion_policy: no deletion without John's explicit yes, unless John later says
 shared_space: >
   CANONICAL = top-level Google Drive folder "Grok" (id 14EOF4io_Y1_QQeWeL8sX0hGXNN-S20s_).
   All inter-agent ops (msg-*.yaml, reply-*.yaml, heartbeat.py, heartbeat JSON) go there.
-  Local inbox (~/.grok/memory/index-queue/inbox) and /mnt/5TB/grok/search-index.yaml are
-  DEPRECATED for messaging. Local agent polls the Drive Grok folder and writes replies back
-  into it. heartbeat JSON writes to Drive/Grok.
+architecture: >
+  Async PUSH-based monitoring via Google Drive Changes API is the intended design.
+  Webhook receiver runs on John's static IP (port 80, fallback 8080) validating the
+  X-Goog-Channel-Token header against a config secret and logging notifications.
+  channel config at Drive/Grok/channel-config.yaml; async-monitor.py at Drive/Grok/async-monitor.py.
+  Polling is deprecated.
+  CAVEAT: Drive push (changes.watch) requires a VERIFIED HTTPS domain; Google will not
+  push to a bare IP or plain http:80. Fallback = async-monitor.py --watch-folder on the
+  locally Drive-synced Grok folder (no open port needed). changes.watch registration must
+  run on the laptop with its own Google creds.
 reachability_check: heartbeat.py liveness script -> small JSON (method, timestamp, last status) in Drive/Grok. No X-API hammering.
 notes: >
   wipe_x.py lives at /mnt/5TB/x-wipe/wipe_x.py on the Kali laptop, not in this repo.
