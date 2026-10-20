@@ -1,11 +1,12 @@
 X-WIPE-AUTO START
 requested_by: John M. Cook
-requested_at: 2026-10-19T22:12:00-04:00
+requested_at: 2026-10-19T22:15:00-04:00
 action: start X-Wipe Auto
 mode: CLI auto
-target: X account @quantumlabs2026
+target: X account @nathanjon007
 scope: Suzanne-related posts on that one account only; do not touch anything else
 deletion_policy: no deletion without John's explicit yes, unless John later says otherwise
+reachability_check: prefer static-IP ping/liveness check of the laptop on the local network, or a central JSON status file that client machines timestamp on check-in; read the latest write time. Do NOT hammer the X API for liveness.
 notes: >
   wipe_x.py lives at /mnt/5TB/x-wipe/wipe_x.py on the Kali laptop, not in this repo.
   X API credits were depleted as of 24 Aug 2026 (402); verify credits before any API scan.
