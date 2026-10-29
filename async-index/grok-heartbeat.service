@@ -1,0 +1,10 @@
+[Unit]
+Description=Grok bus heartbeat (ping 1.1.1.1 and stamp heartbeat.json)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=user
+ExecStart=/usr/bin/python3 /opt/grok/heartbeat.py
+Nice=10
